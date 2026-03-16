@@ -1,0 +1,327 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { 
+  Plus, 
+  Search, 
+  MoreVertical, 
+  Trash2, 
+  Edit2, 
+  Loader2,
+  Tag,
+  AlertCircle,
+  CheckCircle2,
+  X
+} from 'lucide-react';
+import { categoryApi } from '@/lib/api';
+import { clsx } from 'clsx';
+
+export default function CategoryManagement() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+  const [currentCategory, setCurrentCategory] = useState({ 
+    name: '', 
+    description: '', 
+    icon: '', 
+    image_url: '', 
+    is_featured: false 
+  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  const fetchCategories = async () => {
+    setLoading(true);
+    try {
+      const response = await categoryApi.getAll();
+      setCategories(response.data);
+    } catch (err) {
+      console.error("Error fetching categories:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const openAddModal = () => {
+    setModalMode('add');
+    setCurrentCategory({ name: '', description: '', icon: '', image_url: '', is_featured: false });
+    setModalError(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (category: any) => {
+    setModalMode('edit');
+    setEditingId(category._id);
+    setCurrentCategory({ 
+      name: category.name, 
+      description: category.description || '', 
+      icon: category.icon || '',
+      image_url: category.image_url || '',
+      is_featured: category.is_featured || false
+    });
+    setModalError(null);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setCurrentCategory({ name: '', description: '', icon: '', image_url: '', is_featured: false });
+  };
+
+  const handleModalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setModalLoading(true);
+    setModalError(null);
+
+    try {
+      if (modalMode === 'add') {
+        await categoryApi.create(currentCategory);
+      } else if (editingId) {
+        await categoryApi.update(editingId, currentCategory);
+      }
+      await fetchCategories();
+      closeModal();
+    } catch (err: any) {
+      console.error("Error saving category:", err);
+      setModalError(err.response?.data?.detail || "Failed to save category. Please ensure the name is unique.");
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this category? Products linked to this category might need updating.")) return;
+    
+    try {
+      await categoryApi.delete(id);
+      await fetchCategories();
+    } catch (err) {
+      console.error("Error deleting category:", err);
+      alert("Failed to delete category.");
+    }
+  };
+
+  const filteredCategories = categories.filter(cat => 
+    cat.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Category Management</h1>
+          <p className="text-slate-500 mt-1">Create and manage fragrance categories for your products.</p>
+        </div>
+        <button 
+          onClick={openAddModal}
+          className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl flex items-center justify-center space-x-2 font-bold text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
+        >
+          <Plus size={18} />
+          <span>New Category</span>
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input 
+            type="text" 
+            placeholder="Search categories..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </div>
+        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+          {filteredCategories.length} Categories Total
+        </div>
+      </div>
+
+      {/* Categories Grid */}
+      {loading ? (
+        <div className="h-64 flex flex-col items-center justify-center space-y-4">
+          <Loader2 className="animate-spin text-indigo-600" size={40} />
+          <p className="text-slate-500 font-medium">Fetching categories...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredCategories.map((cat) => (
+            <div key={cat._id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+              <div className="flex items-start justify-between relative z-10">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold text-xl overflow-hidden">
+                    {cat.image_url ? (
+                      <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover" />
+                    ) : (
+                      cat.icon || <Tag size={24} />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                       <h3 className="font-bold text-slate-900 text-lg">{cat.name}</h3>
+                       {cat.is_featured && (
+                         <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-tighter">Featured</span>
+                       )}
+                    </div>
+                    <p className="text-sm text-slate-500 line-clamp-1">{cat.description || 'No description provided'}</p>
+                  </div>
+                </div>
+                <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => openEditModal(cat)}
+                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(cat._id)}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              {/* Background Accent */}
+              <div className="absolute top-0 right-0 p-1 bg-indigo-600/5 rounded-bl-3xl transform translate-x-1 -translate-y-1 group-hover:translate-x-0 group-hover:translate-y-0 transition-transform" />
+            </div>
+          ))}
+          {filteredCategories.length === 0 && (
+            <div className="col-span-full py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center space-y-4">
+              <div className="p-4 bg-white rounded-full text-slate-300">
+                <Tag size={40} />
+              </div>
+              <div className="text-center">
+                <h3 className="font-bold text-slate-900 text-lg">No Categories Found</h3>
+                <p className="text-slate-500 text-sm">Get started by creating your first product category.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={closeModal} />
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="h-2 bg-indigo-600 w-full" />
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    {modalMode === 'add' ? 'Create Category' : 'Edit Category'}
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1">Enter the details for this fragrance category.</p>
+                </div>
+                <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleModalSubmit} className="space-y-6">
+                {modalError && (
+                  <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 flex items-start space-x-3 text-sm font-medium animate-in slide-in-from-top-2">
+                    <AlertCircle size={18} className="shrink-0" />
+                    <span>{modalError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Category Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={currentCategory.name}
+                    onChange={(e) => setCurrentCategory({...currentCategory, name: e.target.value})}
+                    placeholder="e.g. Niche, Designer, Middle Eastern"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Icon (Emoji)</label>
+                    <input 
+                      type="text" 
+                      value={currentCategory.icon}
+                      onChange={(e) => setCurrentCategory({...currentCategory, icon: e.target.value})}
+                      placeholder="e.g. 🎩"
+                      maxLength={2}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Featured</label>
+                    <div className="flex h-[46px] items-center">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer"
+                          checked={currentCategory.is_featured}
+                          onChange={(e) => setCurrentCategory({...currentCategory, is_featured: e.target.checked})}
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        <span className="ml-3 text-xs font-bold text-slate-500">Show in Curated Grid</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Image URL</label>
+                  <input 
+                    type="text" 
+                    value={currentCategory.image_url}
+                    onChange={(e) => setCurrentCategory({...currentCategory, image_url: e.target.value})}
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Description</label>
+                  <textarea 
+                    rows={2}
+                    value={currentCategory.description}
+                    onChange={(e) => setCurrentCategory({...currentCategory, description: e.target.value})}
+                    placeholder="Short description of this category type..."
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-4 pt-4">
+                  <button 
+                    type="button"
+                    onClick={closeModal}
+                    className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={modalLoading}
+                    className="flex-[2] bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50 flex items-center justify-center space-x-2"
+                  >
+                    {modalLoading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                    <span>{modalMode === 'add' ? 'Create Category' : 'Save Changes'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
