@@ -60,6 +60,13 @@ export const categoryApi = {
     delete: (id: string) => api.delete(`/categories/${id}`),
 };
 
+export const brandApi = {
+    getAll: () => api.get('/brands'),
+    create: (data: any) => api.post('/brands', data),
+    update: (id: string, data: any) => api.put(`/brands/${id}`, data),
+    delete: (id: string) => api.delete(`/brands/${id}`),
+};
+
 export const dashboardApi = {
     getStats: () => api.get('/analytics/stats'),
 };

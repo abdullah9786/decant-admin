@@ -12,6 +12,7 @@ import {
   BarChart3, 
   Boxes, 
   Tag,
+  Sparkles,
   Settings, 
   LogOut,
   Menu,
@@ -27,6 +28,7 @@ function cn(...inputs: ClassValue[]) {
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Products', href: '/products', icon: Package },
+  { name: 'Brands', href: '/brands', icon: Sparkles },
   { name: 'Categories', href: '/categories', icon: Tag },
   { name: 'Orders', href: '/orders', icon: ShoppingBag },
   { name: 'Users', href: '/users', icon: Users },

@@ -13,7 +13,7 @@ import {
   Loader2,
   CheckCircle2
 } from 'lucide-react';
-import { productApi, categoryApi } from '@/lib/api';
+import { productApi, categoryApi, brandApi } from '@/lib/api';
 
 export default function AddProductPage() {
   const router = useRouter();
@@ -34,11 +34,16 @@ export default function AddProductPage() {
     ,
     notes_top: '',
     notes_middle: '',
-    notes_base: ''
+    notes_base: '',
+    notes_top_desc: '',
+    notes_middle_desc: '',
+    notes_base_desc: ''
   });
 
   const [categories, setCategories] = useState<any[]>([]);
   const [fetchingCategories, setFetchingCategories] = useState(true);
+  const [brands, setBrands] = useState<any[]>([]);
+  const [fetchingBrands, setFetchingBrands] = useState(true);
 
   React.useEffect(() => {
     const fetchCategories = async () => {
@@ -55,6 +60,23 @@ export default function AddProductPage() {
       }
     };
     fetchCategories();
+  }, []);
+
+  React.useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        const response = await brandApi.getAll();
+        setBrands(response.data);
+        if (response.data.length > 0) {
+          setFormData(prev => ({ ...prev, brand: response.data[0].name }));
+        }
+      } catch (err) {
+        console.error("Error fetching brands:", err);
+      } finally {
+        setFetchingBrands(false);
+      }
+    };
+    fetchBrands();
   }, []);
 
   const [variants, setVariants] = useState([
@@ -222,15 +244,25 @@ export default function AddProductPage() {
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Brand</label>
-                  <input 
+                  <select 
                     name="brand"
-                    type="text" 
                     required
                     value={formData.brand}
                     onChange={handleInputChange}
-                    placeholder="e.g. Creed" 
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400" 
-                  />
+                    disabled={fetchingBrands}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer disabled:opacity-50"
+                  >
+                    {fetchingBrands ? (
+                      <option>Loading brands...</option>
+                    ) : (
+                      brands.map((brand: any) => (
+                        <option key={brand._id} value={brand.name}>{brand.name}</option>
+                      ))
+                    )}
+                    {brands.length === 0 && !fetchingBrands && (
+                      <option value="">No brands found</option>
+                    )}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Category</label>
@@ -266,7 +298,7 @@ export default function AddProductPage() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
                 ></textarea>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Perfume Notes (Comma Separated)</label>
                 <textarea
                   name="notes_top"
@@ -274,6 +306,14 @@ export default function AddProductPage() {
                   onChange={handleInputChange}
                   rows={2}
                   placeholder="Top notes (e.g. Bergamot, Lemon, Pink Pepper)"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+                />
+                <textarea
+                  name="notes_top_desc"
+                  value={formData.notes_top_desc}
+                  onChange={handleInputChange}
+                  rows={2}
+                  placeholder="Top notes description (e.g. Bright, sparkling opening.)"
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
                 />
                 <textarea
@@ -285,11 +325,27 @@ export default function AddProductPage() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
                 />
                 <textarea
+                  name="notes_middle_desc"
+                  value={formData.notes_middle_desc}
+                  onChange={handleInputChange}
+                  rows={2}
+                  placeholder="Middle notes description (e.g. Floral heart with depth.)"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+                />
+                <textarea
                   name="notes_base"
                   value={formData.notes_base}
                   onChange={handleInputChange}
                   rows={2}
                   placeholder="Base notes (e.g. Amber, Musk, Vanilla)"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+                />
+                <textarea
+                  name="notes_base_desc"
+                  value={formData.notes_base_desc}
+                  onChange={handleInputChange}
+                  rows={2}
+                  placeholder="Base notes description (e.g. Warm, lingering trail.)"
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
                 />
               </div>
