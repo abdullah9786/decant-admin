@@ -36,28 +36,21 @@ export default function InventoryManagement() {
   }, []);
 
   const flattenedInventory = useMemo(() => {
-    const items: any[] = [];
-    products.forEach(product => {
+    return products.map((product) => {
       const pid = product.id || product._id;
-      (product.variants || []).forEach((variant: any, index: number) => {
-        items.push({
-          skuId: `${pid}-${variant.size_ml}`,
-          productId: pid,
-          variantIndex: index,
-          name: product.name,
-          brand: product.brand,
-          variant: `${variant.size_ml}ML`,
-          stock: variant.stock || 0,
-          threshold: 10, // Default threshold
-        });
-      });
+      return {
+        skuId: pid,
+        productId: pid,
+        name: product.name,
+        brand: product.brand,
+        stock: product.stock_ml || 0,
+        threshold: 50,
+      };
     });
-    return items;
   }, [products]);
 
-  const filteredInventory = flattenedInventory.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.variant.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredInventory = flattenedInventory.filter(item =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const stats = useMemo(() => {
@@ -75,13 +68,11 @@ export default function InventoryManagement() {
     if (!product) return;
 
     const newStock = Math.max(0, item.stock + delta);
-    const updatedVariants = [...product.variants];
-    updatedVariants[item.variantIndex] = { ...updatedVariants[item.variantIndex], stock: newStock };
 
     setUpdatingId(item.skuId);
     try {
-      await productApi.update(item.productId, { ...product, variants: updatedVariants });
-      setProducts(products.map(p => (p.id || p._id) === item.productId ? { ...p, variants: updatedVariants } : p));
+      await productApi.update(item.productId, { ...product, stock_ml: newStock });
+      setProducts(products.map(p => (p.id || p._id) === item.productId ? { ...p, stock_ml: newStock } : p));
     } catch (err) {
       console.error("Error updating stock", err);
       alert('Failed to update stock');
@@ -107,7 +98,7 @@ export default function InventoryManagement() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Total SKU Counts</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Total Products</p>
           <div className="flex items-end justify-between">
             <h3 className="text-2xl font-bold text-slate-900">{stats.total}</h3>
             <PackageCheck size={20} className="text-indigo-600 mb-1" />
@@ -138,7 +129,7 @@ export default function InventoryManagement() {
               type="text" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Filter by product or size..." 
+              placeholder="Filter by product..." 
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-950 font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-400"
             />
           </div>
@@ -153,8 +144,8 @@ export default function InventoryManagement() {
             <table className="w-full text-left">
               <thead className="bg-slate-50/50 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 <tr>
-                  <th className="px-6 py-3">Product SKU</th>
-                  <th className="px-6 py-3 text-center">In Stock</th>
+                  <th className="px-6 py-3">Product</th>
+                  <th className="px-6 py-3 text-center">In Stock (ml)</th>
                   <th className="px-6 py-3 text-center">Threshold</th>
                   <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3 text-right">Quick Update</th>
@@ -166,7 +157,7 @@ export default function InventoryManagement() {
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
                         <span className="font-bold text-slate-900">{item.name}</span>
-                        <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500 uppercase tracking-widest">{item.variant}</span>
+                        <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500 uppercase tracking-widest">ML</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center font-bold">
@@ -187,7 +178,7 @@ export default function InventoryManagement() {
                       <div className="flex items-center justify-end space-x-2">
                         <button 
                             disabled={updatingId === item.skuId}
-                            onClick={() => updateStock(item, -1)}
+                            onClick={() => updateStock(item, -10)}
                             className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
                         >-</button>
                         <span className="w-8 text-center text-xs font-bold">
@@ -195,7 +186,7 @@ export default function InventoryManagement() {
                         </span>
                         <button 
                             disabled={updatingId === item.skuId}
-                            onClick={() => updateStock(item, 1)}
+                            onClick={() => updateStock(item, 10)}
                             className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
                         >+</button>
                       </div>

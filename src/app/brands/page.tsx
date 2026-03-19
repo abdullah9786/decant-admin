@@ -9,9 +9,11 @@ import {
   Loader2,
   Sparkles,
   AlertCircle,
-  X
+  X,
+  GripVertical
 } from 'lucide-react';
 import { brandApi } from '@/lib/api';
+import { clsx } from 'clsx';
 
 export default function BrandManagement() {
   const [brands, setBrands] = useState<any[]>([]);
@@ -23,11 +25,14 @@ export default function BrandManagement() {
   const [currentBrand, setCurrentBrand] = useState({
     name: '',
     description: '',
-    image_url: ''
+    image_url: '',
+    sort_order: 0
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const fetchBrands = async () => {
     setLoading(true);
@@ -47,7 +52,7 @@ export default function BrandManagement() {
 
   const openAddModal = () => {
     setModalMode('add');
-    setCurrentBrand({ name: '', description: '', image_url: '' });
+    setCurrentBrand({ name: '', description: '', image_url: '', sort_order: 0 });
     setModalError(null);
     setIsModalOpen(true);
   };
@@ -58,7 +63,8 @@ export default function BrandManagement() {
     setCurrentBrand({
       name: brand.name,
       description: brand.description || '',
-      image_url: brand.image_url || ''
+      image_url: brand.image_url || '',
+      sort_order: brand.sort_order ?? 0
     });
     setModalError(null);
     setIsModalOpen(true);
@@ -67,7 +73,7 @@ export default function BrandManagement() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
-    setCurrentBrand({ name: '', description: '', image_url: '' });
+    setCurrentBrand({ name: '', description: '', image_url: '', sort_order: 0 });
   };
 
   const handleModalSubmit = async (e: React.FormEvent) => {
@@ -107,12 +113,66 @@ export default function BrandManagement() {
     brand.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const sortedBrands = [...filteredBrands].sort((a, b) => {
+    const aOrder = a.sort_order ?? 0;
+    const bOrder = b.sort_order ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.name.localeCompare(b.name);
+  });
+
+  const handleDrop = async (targetId: string) => {
+    if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
+    const current = [...brands].sort((a, b) => {
+      const aOrder = a.sort_order ?? 0;
+      const bOrder = b.sort_order ?? 0;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name);
+    });
+    const fromIndex = current.findIndex((b) => b._id === draggingId);
+    const toIndex = current.findIndex((b) => b._id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const prevOrderMap = new Map(current.map((b) => [b._id, b.sort_order ?? 0]));
+    const moved = current.splice(fromIndex, 1)[0];
+    current.splice(toIndex, 0, moved);
+    const updated = current.map((b, idx) => ({ ...b, sort_order: idx + 1 }));
+
+    setBrands((prev) =>
+      prev.map((b) => {
+        const found = updated.find((u) => u._id === b._id);
+        return found ? { ...b, sort_order: found.sort_order } : b;
+      })
+    );
+
+    const changed = updated.filter((b) => prevOrderMap.get(b._id) !== b.sort_order);
+    if (changed.length === 0) return;
+
+    setSavingOrder(true);
+    try {
+      await Promise.all(
+        changed.map((b) => brandApi.update(b._id, { sort_order: b.sort_order }))
+      );
+    } catch (err) {
+      console.error("Error updating brand order", err);
+      alert('Failed to save order. Please try again.');
+      await fetchBrands();
+    } finally {
+      setSavingOrder(false);
+      setDraggingId(null);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Brand Management</h1>
           <p className="text-slate-500 mt-1">Create and manage fragrance brands used in your products.</p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
+            Drag cards to reorder
+            {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {savingOrder ? ' • saving…' : ''}
+          </p>
         </div>
         <button
           onClick={openAddModal}
@@ -146,8 +206,20 @@ export default function BrandManagement() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredBrands.map((brand) => (
-            <div key={brand._id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+          {sortedBrands.map((brand) => (
+            <div
+              key={brand._id}
+              draggable={searchTerm.trim().length === 0}
+              onDragStart={() => setDraggingId(brand._id)}
+              onDragOver={(e) => {
+                if (searchTerm.trim().length === 0) e.preventDefault();
+              }}
+              onDrop={() => handleDrop(brand._id)}
+              className={clsx(
+                "bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden",
+                draggingId === brand._id && "bg-indigo-50/60"
+              )}
+            >
               <div className="flex items-start justify-between relative z-10">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold text-xl overflow-hidden">
@@ -160,9 +232,11 @@ export default function BrandManagement() {
                   <div>
                     <h3 className="font-bold text-slate-900 text-lg">{brand.name}</h3>
                     <p className="text-sm text-slate-500 line-clamp-1">{brand.description || 'No description provided'}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">Order {brand.sort_order ?? 0}</p>
                   </div>
                 </div>
-                <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <GripVertical size={16} className={clsx("text-slate-300 cursor-grab", searchTerm.trim().length > 0 && "opacity-40 cursor-not-allowed")} />
                   <button
                     onClick={() => openEditModal(brand)}
                     className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -241,6 +315,19 @@ export default function BrandManagement() {
                     placeholder="https://..."
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Display Order</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={currentBrand.sort_order}
+                    onChange={(e) => setCurrentBrand({ ...currentBrand, sort_order: parseInt(e.target.value || '0', 10) })}
+                    placeholder="e.g. 1"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+                  />
+                  <p className="text-[10px] text-slate-400">Lower numbers appear first on the site.</p>
                 </div>
 
                 <div className="space-y-2">

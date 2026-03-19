@@ -11,7 +11,8 @@ import {
   Tag,
   AlertCircle,
   CheckCircle2,
-  X
+  X,
+  GripVertical
 } from 'lucide-react';
 import { categoryApi } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -29,11 +30,14 @@ export default function CategoryManagement() {
     description: '', 
     icon: '', 
     image_url: '', 
-    is_featured: false 
+    is_featured: false,
+    sort_order: 0
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -53,7 +57,7 @@ export default function CategoryManagement() {
 
   const openAddModal = () => {
     setModalMode('add');
-    setCurrentCategory({ name: '', description: '', icon: '', image_url: '', is_featured: false });
+    setCurrentCategory({ name: '', description: '', icon: '', image_url: '', is_featured: false, sort_order: 0 });
     setModalError(null);
     setIsModalOpen(true);
   };
@@ -66,7 +70,8 @@ export default function CategoryManagement() {
       description: category.description || '', 
       icon: category.icon || '',
       image_url: category.image_url || '',
-      is_featured: category.is_featured || false
+      is_featured: category.is_featured || false,
+      sort_order: category.sort_order ?? 0
     });
     setModalError(null);
     setIsModalOpen(true);
@@ -75,7 +80,7 @@ export default function CategoryManagement() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
-    setCurrentCategory({ name: '', description: '', icon: '', image_url: '', is_featured: false });
+    setCurrentCategory({ name: '', description: '', icon: '', image_url: '', is_featured: false, sort_order: 0 });
   };
 
   const handleModalSubmit = async (e: React.FormEvent) => {
@@ -111,9 +116,58 @@ export default function CategoryManagement() {
     }
   };
 
-  const filteredCategories = categories.filter(cat => 
+  const filteredCategories = categories.filter(cat =>
     cat.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const sortedCategories = [...filteredCategories].sort((a, b) => {
+    const aOrder = a.sort_order ?? 0;
+    const bOrder = b.sort_order ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.name.localeCompare(b.name);
+  });
+
+  const handleDrop = async (targetId: string) => {
+    if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
+    const current = [...categories].sort((a, b) => {
+      const aOrder = a.sort_order ?? 0;
+      const bOrder = b.sort_order ?? 0;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name);
+    });
+    const fromIndex = current.findIndex((c) => c._id === draggingId);
+    const toIndex = current.findIndex((c) => c._id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const prevOrderMap = new Map(current.map((c) => [c._id, c.sort_order ?? 0]));
+    const moved = current.splice(fromIndex, 1)[0];
+    current.splice(toIndex, 0, moved);
+    const updated = current.map((c, idx) => ({ ...c, sort_order: idx + 1 }));
+
+    setCategories((prev) =>
+      prev.map((c) => {
+        const found = updated.find((u) => u._id === c._id);
+        return found ? { ...c, sort_order: found.sort_order } : c;
+      })
+    );
+
+    const changed = updated.filter((c) => prevOrderMap.get(c._id) !== c.sort_order);
+    if (changed.length === 0) return;
+
+    setSavingOrder(true);
+    try {
+      await Promise.all(
+        changed.map((c) => categoryApi.update(c._id, { sort_order: c.sort_order }))
+      );
+    } catch (err) {
+      console.error("Error updating category order", err);
+      alert('Failed to save order. Please try again.');
+      await fetchCategories();
+    } finally {
+      setSavingOrder(false);
+      setDraggingId(null);
+    }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -121,6 +175,11 @@ export default function CategoryManagement() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Category Management</h1>
           <p className="text-slate-500 mt-1">Create and manage fragrance categories for your products.</p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
+            Drag cards to reorder
+            {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {savingOrder ? ' • saving…' : ''}
+          </p>
         </div>
         <button 
           onClick={openAddModal}
@@ -156,8 +215,20 @@ export default function CategoryManagement() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCategories.map((cat) => (
-            <div key={cat._id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+          {sortedCategories.map((cat) => (
+            <div
+              key={cat._id}
+              draggable={searchTerm.trim().length === 0}
+              onDragStart={() => setDraggingId(cat._id)}
+              onDragOver={(e) => {
+                if (searchTerm.trim().length === 0) e.preventDefault();
+              }}
+              onDrop={() => handleDrop(cat._id)}
+              className={clsx(
+                "bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden",
+                draggingId === cat._id && "bg-indigo-50/60"
+              )}
+            >
               <div className="flex items-start justify-between relative z-10">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold text-xl overflow-hidden">
@@ -166,18 +237,20 @@ export default function CategoryManagement() {
                     ) : (
                       cat.icon || <Tag size={24} />
                     )}
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                       <h3 className="font-bold text-slate-900 text-lg">{cat.name}</h3>
-                       {cat.is_featured && (
-                         <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-tighter">Featured</span>
-                       )}
                     </div>
-                    <p className="text-sm text-slate-500 line-clamp-1">{cat.description || 'No description provided'}</p>
-                  </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                         <h3 className="font-bold text-slate-900 text-lg">{cat.name}</h3>
+                         {cat.is_featured && (
+                           <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-tighter">Featured</span>
+                         )}
+                      </div>
+                      <p className="text-sm text-slate-500 line-clamp-1">{cat.description || 'No description provided'}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">Order {cat.sort_order ?? 0}</p>
+                    </div>
                 </div>
-                <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <GripVertical size={16} className={clsx("text-slate-300 cursor-grab", searchTerm.trim().length > 0 && "opacity-40 cursor-not-allowed")} />
                   <button 
                     onClick={() => openEditModal(cat)}
                     className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -287,6 +360,19 @@ export default function CategoryManagement() {
                     placeholder="https://images.unsplash.com/..."
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Display Order</label>
+                  <input 
+                    type="number" 
+                    min={0}
+                    value={currentCategory.sort_order}
+                    onChange={(e) => setCurrentCategory({...currentCategory, sort_order: parseInt(e.target.value || '0', 10)})}
+                    placeholder="e.g. 1"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                  />
+                  <p className="text-[10px] text-slate-400">Lower numbers appear first on the site.</p>
                 </div>
 
                 <div className="space-y-2">

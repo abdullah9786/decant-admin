@@ -11,7 +11,8 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  GripVertical
 } from 'lucide-react';
 import { productApi } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -21,6 +22,8 @@ export default function ProductList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -52,10 +55,58 @@ export default function ProductList() {
     }
   };
 
-  const filteredProducts = products.filter(p => 
+  const sortedProducts = [...products].sort((a, b) => {
+    const aOrder = a.sort_order ?? 0;
+    const bOrder = b.sort_order ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bCreated - aCreated;
+  });
+
+  const filteredProducts = sortedProducts.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.brand.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const getId = (product: any) => product.id || product._id;
+
+  const handleDrop = async (targetId: string) => {
+    if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
+    const current = [...sortedProducts];
+    const fromIndex = current.findIndex((p) => getId(p) === draggingId);
+    const toIndex = current.findIndex((p) => getId(p) === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const prevOrderMap = new Map(current.map((p) => [getId(p), p.sort_order ?? 0]));
+    const moved = current.splice(fromIndex, 1)[0];
+    current.splice(toIndex, 0, moved);
+
+    const updated = current.map((p, idx) => ({ ...p, sort_order: idx + 1 }));
+    setProducts((prev) =>
+      prev.map((p) => {
+        const found = updated.find((u) => getId(u) === getId(p));
+        return found ? { ...p, sort_order: found.sort_order } : p;
+      })
+    );
+
+    const changed = updated.filter((p) => prevOrderMap.get(getId(p)) !== p.sort_order);
+    if (changed.length === 0) return;
+
+    setSavingOrder(true);
+    try {
+      await Promise.all(
+        changed.map((p) => productApi.update(getId(p), { sort_order: p.sort_order }))
+      );
+    } catch (err) {
+      console.error("Error updating product order", err);
+      alert('Failed to save order. Please try again.');
+      fetchProducts();
+    } finally {
+      setSavingOrder(false);
+      setDraggingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -63,6 +114,11 @@ export default function ProductList() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Products</h1>
           <p className="text-slate-500 mt-1">Manage your perfume catalog and decant variants.</p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
+            Drag rows to reorder
+            {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {savingOrder ? ' • saving…' : ''}
+          </p>
         </div>
         <div className="flex space-x-3">
           <button 
@@ -115,9 +171,11 @@ export default function ProductList() {
             <table className="w-full text-left">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Move</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Product</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Brand</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Category</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Order</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Variants</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Stock Status</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Actions</th>
@@ -125,12 +183,27 @@ export default function ProductList() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredProducts.map((product) => {
-                  const totalStock = product.variants?.reduce((acc: number, v: any) => acc + (v.stock || 0), 0) || 0;
-                  const isLowStock = product.variants?.some((v: any) => (v.stock || 0) < 10);
+                  const totalStock = product.stock_ml || 0;
+                  const isLowStock = totalStock > 0 && totalStock < 50;
 
                   const productId = product.id || product._id;
                   return (
-                    <tr key={productId} className="hover:bg-slate-50/50 transition-colors group">
+                    <tr
+                      key={productId}
+                      draggable={searchTerm.trim().length === 0}
+                      onDragStart={() => setDraggingId(productId)}
+                      onDragOver={(e) => {
+                        if (searchTerm.trim().length === 0) e.preventDefault();
+                      }}
+                      onDrop={() => handleDrop(productId)}
+                      className={clsx(
+                        "hover:bg-slate-50/50 transition-colors group",
+                        draggingId === productId && "bg-indigo-50/60"
+                      )}
+                    >
+                      <td className="px-4 py-4 text-slate-400">
+                        <GripVertical size={16} className={clsx("cursor-grab", searchTerm.trim().length > 0 && "opacity-40 cursor-not-allowed")} />
+                      </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center space-x-4">
                           <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
@@ -152,6 +225,9 @@ export default function ProductList() {
                             {product.category || 'Niche'}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 font-bold">
+                        {product.sort_order ?? 0}
+                      </td>
                       <td className="px-6 py-4 text-sm font-bold text-indigo-600">
                          {product.variants?.length || 0} Sizes
                       </td>
@@ -161,7 +237,7 @@ export default function ProductList() {
                             "w-fit px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
                             isLowStock ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"
                           )}>
-                            {totalStock} Total Units
+                            {totalStock} ml
                           </span>
                           {isLowStock && <span className="text-[10px] text-red-500 font-bold uppercase animate-pulse">Low Stock Detected</span>}
                         </div>
