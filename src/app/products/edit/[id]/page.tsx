@@ -15,6 +15,7 @@ import {
   Save
 } from 'lucide-react';
 import { productApi, categoryApi, brandApi } from '@/lib/api';
+import RichTextEditor from '@/components/shared/RichTextEditor';
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -71,9 +72,9 @@ export default function EditProductPage() {
           is_featured: product.is_featured || false,
           is_new_arrival: product.is_new_arrival || false,
           is_active: product.is_active !== undefined ? product.is_active : true,
-          notes_top: (product.notes_top || []).join(', '),
-          notes_middle: (product.notes_middle || []).join(', '),
-          notes_base: (product.notes_base || []).join(', '),
+          notes_top: (product.notes_top || []).join('\n'),
+          notes_middle: (product.notes_middle || []).join('\n'),
+          notes_base: (product.notes_base || []).join('\n'),
           notes_top_desc: product.notes_top_desc || '',
           notes_middle_desc: product.notes_middle_desc || '',
           notes_base_desc: product.notes_base_desc || ''
@@ -167,7 +168,7 @@ export default function EditProductPage() {
     try {
       const splitNotes = (value: string) =>
         value
-          .split(',')
+          .split(/,|\n/)
           .map((v) => v.trim())
           .filter(Boolean);
       const productPayload = {
@@ -346,15 +347,11 @@ export default function EditProductPage() {
 
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="text-slate-900 font-bold">Description</div>
-            <textarea 
-              name="description"
-              required
+            <RichTextEditor 
               value={formData.description}
-              onChange={handleInputChange}
-              rows={5} 
+              onChange={(content: string) => setFormData(prev => ({ ...prev, description: content }))}
               placeholder="Describe the fragrance notes and character..." 
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
-            ></textarea>
+            />
           </section>
 
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">

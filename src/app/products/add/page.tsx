@@ -14,6 +14,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { productApi, categoryApi, brandApi } from '@/lib/api';
+import RichTextEditor from '@/components/shared/RichTextEditor';
 
 export default function AddProductPage() {
   const router = useRouter();
@@ -132,7 +133,7 @@ export default function AddProductPage() {
     try {
       const splitNotes = (value: string) =>
         value
-          .split(',')
+          .split(/,|\n/)
           .map((v) => v.trim())
           .filter(Boolean);
       const productPayload = {
@@ -306,15 +307,11 @@ export default function AddProductPage() {
 
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="text-slate-900 font-bold">Description</div>
-            <textarea 
-              name="description"
-              required
+            <RichTextEditor 
               value={formData.description}
-              onChange={handleInputChange}
-              rows={5} 
+              onChange={(content: string) => setFormData(prev => ({ ...prev, description: content }))}
               placeholder="Describe the fragrance notes and character..." 
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
-            ></textarea>
+            />
           </section>
 
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
