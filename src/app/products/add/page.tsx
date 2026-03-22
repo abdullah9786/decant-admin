@@ -83,10 +83,25 @@ export default function AddProductPage() {
   }, []);
 
   const [variants, setVariants] = useState([
-    { size_ml: 2, price: 0 },
     { size_ml: 5, price: 0 },
     { size_ml: 10, price: 0 },
   ]);
+
+  const [basePrice100ml, setBasePrice100ml] = useState<number | string>('');
+
+  const handleBasePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setBasePrice100ml(val);
+    
+    if (val && !isNaN(Number(val))) {
+      const price = Number(val);
+      // For NEW products, we strictly only auto-fill 5ml and 10ml
+      setVariants([
+        { size_ml: 5, price: Math.round((price / 100) * 5) },
+        { size_ml: 10, price: Math.round((price / 100) * 10) },
+      ]);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -389,7 +404,7 @@ export default function AddProductPage() {
             </div>
           </section>
 
-          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
             <div className="flex items-center justify-between">
               <div className="text-slate-900 font-bold">Decant Variants</div>
               <button 
@@ -399,6 +414,29 @@ export default function AddProductPage() {
               >
                 Add Size
               </button>
+            </div>
+
+            {/* Base Price 100ml Reference */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <div className="flex items-center space-x-2 text-slate-700 font-bold text-sm">
+                <Info size={16} className="text-indigo-500" />
+                <span>Reference Price (100ml)</span>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="relative flex-1">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+                  <input 
+                    type="number"
+                    value={basePrice100ml}
+                    onChange={handleBasePriceChange}
+                    placeholder="Enter 100ml price to auto-fill" 
+                    className="w-full pl-8 pr-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+                  />
+                </div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold max-w-[150px]">
+                  * This price is only for calculation and won't be saved as a variant.
+                </div>
+              </div>
             </div>
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-2">
