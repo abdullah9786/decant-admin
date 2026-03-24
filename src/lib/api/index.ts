@@ -79,12 +79,17 @@ export const influencerAdminApi = {
     getCommissions: (status?: string) =>
         api.get('/influencers/admin/commissions', { params: status ? { status_filter: status } : {} }),
     approveCommission: (id: string) => api.put(`/influencers/admin/commissions/${id}/approve`),
-    cancelCommission: (id: string) => api.put(`/influencers/admin/commissions/${id}/cancel`),
+    cancelCommission: (id: string, reason?: string) => api.put(`/influencers/admin/commissions/${id}/cancel`, { reason }),
+    bulkApproveCommissions: () => api.put('/influencers/admin/commissions/bulk-approve'),
+    bulkApproveSelected: (ids: string[]) => api.put('/influencers/admin/commissions/bulk-approve-selected', { commission_ids: ids }),
+    bulkCancelSelected: (ids: string[], reason?: string) => api.put('/influencers/admin/commissions/bulk-cancel-selected', { commission_ids: ids, reason }),
 
     createPayout: (influencerId: string, method: string) =>
         api.post('/influencers/admin/payouts', { influencer_id: influencerId, method }),
     completePayout: (payoutId: string) => api.put(`/influencers/admin/payouts/${payoutId}/complete`),
     getPayouts: (influencerId: string) => api.get(`/influencers/admin/payouts/${influencerId}`),
+    bulkCreatePayouts: () => api.post('/influencers/admin/payouts/bulk'),
+    bulkCompletePayouts: (influencerId: string) => api.put(`/influencers/admin/payouts/${influencerId}/bulk-complete`),
 
     getCoupons: () => api.get('/influencers/admin/coupons'),
     createCoupon: (data: any) => api.post('/influencers/admin/coupons', data),
