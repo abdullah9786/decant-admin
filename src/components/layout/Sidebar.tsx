@@ -16,7 +16,10 @@ import {
   Settings, 
   LogOut,
   Menu,
-  X
+  X,
+  DollarSign,
+  Wallet,
+  Ticket,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -34,6 +37,10 @@ const navItems = [
   { name: 'Users', href: '/users', icon: Users },
   { name: 'Inventory', href: '/inventory', icon: Boxes },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Influencers', href: '/influencers', icon: Sparkles },
+  { name: 'Commissions', href: '/commissions', icon: DollarSign },
+  { name: 'Payouts', href: '/payouts', icon: Wallet },
+  { name: 'Coupons', href: '/coupons', icon: Ticket },
 ];
 
 const Sidebar = () => {
@@ -59,7 +66,7 @@ const Sidebar = () => {
 
       <nav className="flex-1 py-6 px-4 space-y-1">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           return (
             <Link
               key={item.name}

@@ -71,4 +71,25 @@ export const dashboardApi = {
     getStats: () => api.get('/analytics/stats'),
 };
 
+export const influencerAdminApi = {
+    getAll: () => api.get('/influencers/admin/all'),
+    create: (data: any) => api.post('/influencers/create', data),
+    toggleActive: (profileId: string) => api.put(`/influencers/${profileId}/toggle-active`),
+
+    getCommissions: (status?: string) =>
+        api.get('/influencers/admin/commissions', { params: status ? { status_filter: status } : {} }),
+    approveCommission: (id: string) => api.put(`/influencers/admin/commissions/${id}/approve`),
+    cancelCommission: (id: string) => api.put(`/influencers/admin/commissions/${id}/cancel`),
+
+    createPayout: (influencerId: string, method: string) =>
+        api.post('/influencers/admin/payouts', { influencer_id: influencerId, method }),
+    completePayout: (payoutId: string) => api.put(`/influencers/admin/payouts/${payoutId}/complete`),
+    getPayouts: (influencerId: string) => api.get(`/influencers/admin/payouts/${influencerId}`),
+
+    getCoupons: () => api.get('/influencers/admin/coupons'),
+    createCoupon: (data: any) => api.post('/influencers/admin/coupons', data),
+    updateCoupon: (id: string, data: any) => api.put(`/influencers/admin/coupons/${id}`, data),
+    deleteCoupon: (id: string) => api.delete(`/influencers/admin/coupons/${id}`),
+};
+
 export default api;
