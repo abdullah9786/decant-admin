@@ -74,6 +74,7 @@ export const dashboardApi = {
 export const influencerAdminApi = {
     getAll: () => api.get('/influencers/admin/all'),
     create: (data: any) => api.post('/influencers/create', data),
+    update: (profileId: string, data: any) => api.put(`/influencers/${profileId}`, data),
     toggleActive: (profileId: string) => api.put(`/influencers/${profileId}/toggle-active`),
 
     getCommissions: (status?: string) =>

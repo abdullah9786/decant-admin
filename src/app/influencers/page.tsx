@@ -17,6 +17,7 @@ import {
   Link as LinkIcon,
   Copy,
   Check,
+  Pencil,
 } from "lucide-react";
 import { influencerAdminApi, userApi } from "@/lib/api";
 import { clsx } from "clsx";
@@ -39,6 +40,19 @@ export default function InfluencerManagement() {
     display_name: "",
     bio: "",
     commission_rate: 0.1,
+    payout_upi: "",
+  });
+
+  // Edit modal
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    _id: "",
+    display_name: "",
+    bio: "",
+    commission_rate: 0.1,
+    payout_upi: "",
   });
 
   const fetchData = async () => {
@@ -85,11 +99,43 @@ export default function InfluencerManagement() {
       const res = await influencerAdminApi.create(newInfluencer);
       setInfluencers([{ ...res.data, earnings: { total_earnings: 0, pending_earnings: 0, approved_earnings: 0, paid_earnings: 0, total_orders: 0 } }, ...influencers]);
       setIsModalOpen(false);
-      setNewInfluencer({ user_id: "", username: "", display_name: "", bio: "", commission_rate: 0.1 });
+      setNewInfluencer({ user_id: "", username: "", display_name: "", bio: "", commission_rate: 0.1, payout_upi: "" });
     } catch (err: any) {
       setModalError(err.response?.data?.detail || "Failed to create influencer.");
     } finally {
       setModalLoading(false);
+    }
+  };
+
+  const openEdit = (inf: any) => {
+    setEditForm({
+      _id: inf._id || inf.id,
+      display_name: inf.display_name || "",
+      bio: inf.bio || "",
+      commission_rate: inf.commission_rate || 0.1,
+      payout_upi: inf.payout_upi || "",
+    });
+    setEditError(null);
+    setEditModalOpen(true);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditLoading(true);
+    setEditError(null);
+    try {
+      const { _id, ...data } = editForm;
+      const res = await influencerAdminApi.update(_id, data);
+      setInfluencers((prev) =>
+        prev.map((inf) =>
+          (inf._id || inf.id) === _id ? { ...inf, ...res.data } : inf
+        )
+      );
+      setEditModalOpen(false);
+    } catch (err: any) {
+      setEditError(err.response?.data?.detail || "Failed to update influencer.");
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -253,29 +299,144 @@ export default function InfluencerManagement() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleToggleActive(pid)}
-                        disabled={actionId === pid}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
-                        title={inf.is_active ? "Deactivate" : "Activate"}
-                      >
-                        {actionId === pid ? (
-                          <Loader2 className="animate-spin" size={16} />
-                        ) : inf.is_active ? (
-                          <ToggleRight
-                            size={20}
-                            className="text-emerald-600"
-                          />
-                        ) : (
-                          <ToggleLeft size={20} />
-                        )}
-                      </button>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => openEdit(inf)}
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleToggleActive(pid)}
+                          disabled={actionId === pid}
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+                          title={inf.is_active ? "Deactivate" : "Activate"}
+                        >
+                          {actionId === pid ? (
+                            <Loader2 className="animate-spin" size={16} />
+                          ) : inf.is_active ? (
+                            <ToggleRight
+                              size={20}
+                              className="text-emerald-600"
+                            />
+                          ) : (
+                            <ToggleLeft size={20} />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">
+                Edit Influencer
+              </h3>
+              <button
+                onClick={() => setEditModalOpen(false)}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEdit} className="p-6 space-y-5">
+              {editError && (
+                <div className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-lg text-xs font-bold flex items-center">
+                  <AlertCircle size={14} className="mr-2 shrink-0" />
+                  {editError}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Display Name
+                </label>
+                <input
+                  required
+                  value={editForm.display_name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, display_name: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none text-slate-900"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Bio
+                </label>
+                <textarea
+                  value={editForm.bio}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, bio: e.target.value })
+                  }
+                  rows={3}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none text-slate-900 resize-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Commission Rate
+                </label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    step={1}
+                    value={Math.round(editForm.commission_rate * 100)}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        commission_rate: parseInt(e.target.value || "10") / 100,
+                      })
+                    }
+                    className="w-24 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none text-slate-900"
+                  />
+                  <span className="text-sm text-slate-500 font-bold">%</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Payout UPI ID
+                </label>
+                <input
+                  value={editForm.payout_upi}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, payout_upi: e.target.value })
+                  }
+                  placeholder="yourname@upi"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400 text-slate-900"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={editLoading}
+                className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {editLoading ? (
+                  <Loader2 className="animate-spin" size={18} />
+                ) : (
+                  <Check size={18} />
+                )}
+                <span>{editLoading ? "Saving..." : "Save Changes"}</span>
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
@@ -387,6 +548,20 @@ export default function InfluencerManagement() {
                   />
                   <span className="text-sm text-slate-500 font-bold">%</span>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Payout UPI ID
+                </label>
+                <input
+                  value={newInfluencer.payout_upi}
+                  onChange={(e) =>
+                    setNewInfluencer({ ...newInfluencer, payout_upi: e.target.value })
+                  }
+                  placeholder="yourname@upi"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400 text-slate-900"
+                />
               </div>
 
               <button

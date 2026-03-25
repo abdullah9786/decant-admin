@@ -28,7 +28,7 @@ export default function ProductList() {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const response = await productApi.getAll();
+      const response = await productApi.getAll({ include_inactive: true });
       setProducts(response.data);
     } catch (err) {
       console.error("Error fetching products", err);
