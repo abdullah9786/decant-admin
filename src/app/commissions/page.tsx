@@ -132,8 +132,9 @@ export default function CommissionsPage() {
       setCommissions((prev) =>
         prev.map((c) => ((c._id || c.id) === id ? res.data : c))
       );
-    } catch {
-      setModal({ type: "result", title: "Error", message: "Failed to approve commission.", isError: true });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Failed to approve commission.";
+      setModal({ type: "result", title: "Error", message: detail, isError: true });
     } finally {
       setActionId(null);
     }
@@ -197,8 +198,9 @@ export default function CommissionsPage() {
           const res = await influencerAdminApi.bulkApproveCommissions();
           await fetchCommissions();
           setModal({ type: "result", title: "Approved", message: `${res.data.approved_count} commissions approved.` });
-        } catch {
-          setModal({ type: "result", title: "Error", message: "Failed to bulk approve.", isError: true });
+        } catch (err: any) {
+          const detail = err?.response?.data?.detail || "Failed to bulk approve. Some orders may not be delivered yet.";
+          setModal({ type: "result", title: "Error", message: detail, isError: true });
         } finally {
           setBulkAction(null);
         }
@@ -219,8 +221,9 @@ export default function CommissionsPage() {
           const res = await influencerAdminApi.bulkApproveSelected(ids);
           await fetchCommissions();
           setModal({ type: "result", title: "Approved", message: `${res.data.approved_count} commission(s) approved.` });
-        } catch {
-          setModal({ type: "result", title: "Error", message: "Failed to approve selected.", isError: true });
+        } catch (err: any) {
+          const detail = err?.response?.data?.detail || "Failed to approve selected. Some orders may not be delivered yet.";
+          setModal({ type: "result", title: "Error", message: detail, isError: true });
         } finally {
           setBulkAction(null);
         }
