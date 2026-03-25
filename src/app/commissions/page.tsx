@@ -656,7 +656,19 @@ export default function CommissionsPage() {
                       {c.order_id?.slice(-8)}
                     </td>
                     <td className="px-4 py-4 font-medium text-slate-900">
-                      ₹{(c.order_total || 0).toLocaleString("en-IN")}
+                      <div className="flex flex-col">
+                        {c.original_order_total && c.original_order_total !== c.order_total ? (
+                          <>
+                            <span className="line-through text-slate-400 text-xs">₹{(c.original_order_total || 0).toLocaleString("en-IN")}</span>
+                            <span>₹{(c.order_total || 0).toLocaleString("en-IN")}</span>
+                            <span className="text-[10px] text-amber-600">
+                              {c.status === "cancelled" ? "Order cancelled" : "Item cancelled"}
+                            </span>
+                          </>
+                        ) : (
+                          <span>₹{(c.order_total || 0).toLocaleString("en-IN")}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-4 font-bold text-emerald-700">
                       ₹{(c.commission_amount || 0).toLocaleString("en-IN")}
