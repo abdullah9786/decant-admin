@@ -1,19 +1,27 @@
 "use client";
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAdminStore } from '@/store/useAdminStore';
 import { authApi } from '@/lib/api';
 import { Mail, Lock, Loader2, ShieldCheck } from 'lucide-react';
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  
+  const searchParams = useSearchParams();
+  const sessionExpired = searchParams.get('session') === 'expired';
+
   const router = useRouter();
   const setAuth = useAdminStore((state: any) => state.setAuth);
+
+  useEffect(() => {
+    if (sessionExpired) {
+      setError('Your session expired. Please sign in again.');
+    }
+  }, [sessionExpired]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,15 +30,15 @@ export default function AdminLoginPage() {
 
     try {
       const response = await authApi.login({ email, password });
-      const { access_token, user } = response.data;
-      
+      const { access_token, refresh_token, user } = response.data;
+
       if (!user.is_admin) {
         setError('Access denied. Administrator privileges required.');
         setLoading(false);
         return;
       }
-      
-      setAuth(user, access_token);
+
+      setAuth(user, access_token, refresh_token);
       router.push('/');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Invalid credentials');
@@ -92,5 +100,19 @@ export default function AdminLoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <Loader2 className="animate-spin text-indigo-600" size={32} />
+        </div>
+      }
+    >
+      <AdminLoginForm />
+    </Suspense>
   );
 }

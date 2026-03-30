@@ -1,6 +1,27 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { useAdminStore } from '@/store/useAdminStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+const rawAuthClient = axios.create({
+    baseURL: API_URL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+let refreshPromise: Promise<string> | null = null;
+
+function skipRefreshForUrl(url: string | undefined): boolean {
+    if (!url) return true;
+    const paths = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
+    return paths.some((p) => url.includes(p));
+}
+
+export function revokeRefreshOnServer(refreshToken: string | null | undefined) {
+    if (!refreshToken) return Promise.resolve();
+    return rawAuthClient.post('/auth/logout', { refresh_token: refreshToken }).catch(() => {});
+}
 
 const api = axios.create({
     baseURL: API_URL,
@@ -9,24 +30,60 @@ const api = axios.create({
     },
 });
 
-// Interceptor for Auth tokens
 api.interceptors.request.use((config) => {
     if (typeof window !== 'undefined') {
-        const storage = localStorage.getItem('admin-storage');
-        if (storage) {
-            try {
-                const parsed = JSON.parse(storage);
-                const token = parsed.state.token;
-                if (token) {
-                    config.headers.Authorization = `Bearer ${token}`;
-                }
-            } catch (e) {
-                console.error("Error parsing admin token", e);
-            }
+        const token = useAdminStore.getState().token;
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
         }
     }
     return config;
 });
+
+api.interceptors.response.use(
+    (r) => r,
+    async (error: AxiosError) => {
+        const original = error.config as InternalAxiosRequestConfig & { _retryRefresh?: boolean };
+        if (!original || original._retryRefresh) return Promise.reject(error);
+        if (error.response?.status !== 401) return Promise.reject(error);
+        if (skipRefreshForUrl(original.url)) return Promise.reject(error);
+
+        const refresh = useAdminStore.getState().refreshToken;
+        if (!refresh) {
+            useAdminStore.getState().logout();
+            if (typeof window !== 'undefined') {
+                window.location.assign('/login?session=expired');
+            }
+            return Promise.reject(error);
+        }
+
+        try {
+            if (!refreshPromise) {
+                refreshPromise = rawAuthClient
+                    .post('/auth/refresh', { refresh_token: refresh })
+                    .then((res) => {
+                        const { access_token, refresh_token, user } = res.data;
+                        useAdminStore.getState().setAuth(user, access_token, refresh_token);
+                        return access_token as string;
+                    })
+                    .finally(() => {
+                        refreshPromise = null;
+                    });
+            }
+            const newAccess = await refreshPromise;
+            original.headers = original.headers || {};
+            (original.headers as Record<string, string>).Authorization = `Bearer ${newAccess}`;
+            original._retryRefresh = true;
+            return api(original);
+        } catch {
+            useAdminStore.getState().logout();
+            if (typeof window !== 'undefined') {
+                window.location.assign('/login?session=expired');
+            }
+            return Promise.reject(error);
+        }
+    }
+);
 
 export const authApi = {
     login: (data: any) => api.post('/auth/login', data),

@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAdminStore } from '@/store/useAdminStore';
+import { revokeRefreshOnServer } from '@/lib/api';
 import { 
   LayoutDashboard, 
   Package, 
@@ -48,7 +49,9 @@ const Sidebar = () => {
   const router = useRouter();
   const { logout } = useAdminStore();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const rt = useAdminStore.getState().refreshToken;
+    await revokeRefreshOnServer(rt);
     logout();
     router.push('/login');
   };
