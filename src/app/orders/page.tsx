@@ -17,7 +17,8 @@ import {
   MapPin,
   ShoppingBag,
   Mail,
-  User
+  User,
+  Phone
 } from 'lucide-react';
 import { orderApi } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -373,6 +374,28 @@ export default function OrderManagement() {
                                    <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Customer ID: {(selectedOrder.user_id || '').substring(0, 8)}</p>
                                 </div>
                              </div>
+                             {(selectedOrder.customer_email || selectedOrder.customer_email === '') && (
+                               <div className="flex items-start space-x-3">
+                                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400 border border-slate-200">
+                                     <Mail size={14} />
+                                  </div>
+                                  <div>
+                                     <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">Email</p>
+                                     <p className="text-sm text-slate-900">{selectedOrder.customer_email || '—'}</p>
+                                  </div>
+                               </div>
+                             )}
+                             {(selectedOrder.customer_phone || selectedOrder.customer_phone === '') && (
+                               <div className="flex items-start space-x-3">
+                                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400 border border-slate-200">
+                                     <Phone size={14} />
+                                  </div>
+                                  <div>
+                                     <p className="text-xs font-bold text-slate-700 uppercase tracking-widest">Phone</p>
+                                     <p className="text-sm text-slate-900">{selectedOrder.customer_phone || '—'}</p>
+                                  </div>
+                               </div>
+                             )}
                           </div>
                        </div>
 
