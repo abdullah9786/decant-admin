@@ -57,11 +57,9 @@ export default function EditProductPage() {
     
     if (val && !isNaN(Number(val))) {
       const price = Number(val);
-      // Update ALL existing variants proportionally based on their size
-      const updatedVariants = variants.map(v => ({
-        ...v,
-        price: Math.round((price / 100) * v.size_ml)
-      }));
+      const updatedVariants = variants.map((v: any) => (
+        v.is_pack ? v : { ...v, price: Math.round((price / 100) * v.size_ml) }
+      ));
       
       setVariants(updatedVariants);
     }
@@ -155,7 +153,7 @@ export default function EditProductPage() {
   };
 
   const addVariant = () => {
-    setVariants([...variants, { size_ml: 0, price: 0 }]);
+    setVariants([...variants, { size_ml: 0, price: 0, is_pack: false, stock: 0 }]);
   };
 
   const removeVariant = (index: number) => {
@@ -199,7 +197,9 @@ export default function EditProductPage() {
           .filter(v => parseFloat(String(v.price)) > 0)
           .map(v => ({
             size_ml: parseInt(String(v.size_ml)),
-            price: parseFloat(String(v.price))
+            price: parseFloat(String(v.price)),
+            is_pack: !!(v as any).is_pack,
+            stock: (v as any).is_pack ? parseInt(String((v as any).stock || 0)) : 0,
           }))
       };
 
@@ -448,7 +448,7 @@ export default function EditProductPage() {
 
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
             <div className="flex items-center justify-between">
-              <div className="text-slate-900 font-bold">Decant Variants</div>
+              <div className="text-slate-900 font-bold">Variants</div>
               <button 
                 type="button"
                 onClick={addVariant}
@@ -481,13 +481,15 @@ export default function EditProductPage() {
               </div>
             </div>
             <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-2">
+              <div className="grid grid-cols-[1fr_1fr_auto_auto_auto] gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-2">
                 <span>Size</span>
                 <span>Price</span>
-                <span className="text-right">Action</span>
+                <span className="w-16 text-center">Pack</span>
+                <span className="w-20 text-center">Stock</span>
+                <span className="w-10" />
               </div>
-              {variants.map((variant, i) => (
-                <div key={i} className="grid grid-cols-3 gap-4 items-center">
+              {variants.map((variant: any, i: number) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto_auto] gap-3 items-center">
                   <div className="relative">
                     <input 
                       type="number"
@@ -505,7 +507,24 @@ export default function EditProductPage() {
                     placeholder="Price" 
                     className="px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-400" 
                   />
-                  <div className="text-right">
+                  <label className="w-16 flex items-center justify-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!variant.is_pack}
+                      onChange={(e) => handleVariantChange(i, 'is_pack', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-checked:bg-indigo-600 rounded-full relative transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+                  </label>
+                  <input
+                    type="number"
+                    value={variant.is_pack ? (variant.stock ?? 0) : ''}
+                    onChange={(e) => handleVariantChange(i, 'stock', e.target.value)}
+                    placeholder={variant.is_pack ? "0" : "—"}
+                    disabled={!variant.is_pack}
+                    className="w-20 px-3 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-400 disabled:opacity-40 disabled:cursor-not-allowed text-center"
+                  />
+                  <div className="w-10 text-right">
                     <button 
                       type="button"
                       onClick={() => removeVariant(i)}
