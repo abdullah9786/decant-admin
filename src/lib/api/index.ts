@@ -130,6 +130,14 @@ export const dashboardApi = {
     getStats: () => api.get('/analytics/stats'),
 };
 
+export const giftBoxApi = {
+    getAll: (params?: any) => api.get('/gift-boxes', { params }),
+    getOne: (id: string) => api.get(`/gift-boxes/${id}`),
+    create: (data: any) => api.post('/gift-boxes', data),
+    update: (id: string, data: any) => api.put(`/gift-boxes/${id}`, data),
+    delete: (id: string) => api.delete(`/gift-boxes/${id}`),
+};
+
 export const influencerAdminApi = {
     getAll: () => api.get('/influencers/admin/all'),
     create: (data: any) => api.post('/influencers/create', data),
