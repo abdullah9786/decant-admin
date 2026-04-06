@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, AlertTriangle, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertTriangle, Trash2, Plus, X } from 'lucide-react';
 import { giftBoxApi } from '@/lib/api';
 
 function slugify(str: string) {
@@ -22,14 +22,17 @@ export default function AddGiftBox() {
     description: '',
     image_url: '',
     images: [] as string[],
+    box_type: 'fixed' as 'fixed' | 'combo',
     size_ml: 5,
     slot_count: 4,
+    slot_sizes: [] as number[],
     box_price: 0,
     tier: 'standard',
     stock: 0,
     sort_order: 0,
     is_active: true,
   });
+  const [newSlotSize, setNewSlotSize] = useState(5);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -54,13 +57,15 @@ export default function AddGiftBox() {
     setLoading(true);
     setError(null);
     try {
+      const isCombo = formData.box_type === 'combo';
       const payload = {
         ...formData,
         box_price: parseFloat(String(formData.box_price)),
         stock: parseInt(String(formData.stock)),
         sort_order: parseInt(String(formData.sort_order)),
-        size_ml: parseInt(String(formData.size_ml)),
-        slot_count: parseInt(String(formData.slot_count)),
+        size_ml: isCombo ? 0 : parseInt(String(formData.size_ml)),
+        slot_count: isCombo ? formData.slot_sizes.length : parseInt(String(formData.slot_count)),
+        slot_sizes: isCombo ? formData.slot_sizes : [],
       };
       await giftBoxApi.create(payload);
       setSuccess(true);
@@ -136,6 +141,21 @@ export default function AddGiftBox() {
 
         <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
           <div className="text-slate-900 font-bold">Configuration</div>
+
+          {/* Box Type Toggle */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Box Type</label>
+            <div className="flex space-x-2">
+              {(['fixed', 'combo'] as const).map((t) => (
+                <button key={t} type="button" onClick={() => setFormData(prev => ({ ...prev, box_type: t }))}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all border ${formData.box_type === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-500 border-slate-300 hover:border-indigo-400'}`}>
+                  {t === 'fixed' ? 'Fixed Size' : 'Combo (Mixed)'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {formData.box_type === 'fixed' ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Size (ML)</label>
@@ -157,6 +177,40 @@ export default function AddGiftBox() {
               </select>
             </div>
           </div>
+          ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Box Price (₹)</label>
+                <input type="number" name="box_price" value={formData.box_price} onChange={handleChange} min={0} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Tier</label>
+                <select name="tier" value={formData.tier} onChange={handleChange} className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none">
+                  <option value="standard">Standard</option>
+                  <option value="premium">Premium</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Slot Sizes ({formData.slot_sizes.length} slots)</label>
+              <div className="flex flex-wrap gap-2">
+                {formData.slot_sizes.map((sz, i) => (
+                  <span key={i} className="inline-flex items-center space-x-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold px-3 py-1.5 rounded-full border border-indigo-200">
+                    <span>{sz}ml</span>
+                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, slot_sizes: prev.slot_sizes.filter((_, idx) => idx !== i) }))} className="text-indigo-400 hover:text-red-500 transition-colors"><X size={12} /></button>
+                  </span>
+                ))}
+                {formData.slot_sizes.length === 0 && <span className="text-xs text-slate-400 italic">No slots added yet</span>}
+              </div>
+              <div className="flex items-center space-x-2 mt-2">
+                <input type="number" value={newSlotSize} onChange={(e) => setNewSlotSize(parseInt(e.target.value) || 0)} min={1} placeholder="5" className="w-24 px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase">ml</span>
+                <button type="button" onClick={() => { if (newSlotSize > 0) setFormData(prev => ({ ...prev, slot_sizes: [...prev.slot_sizes, newSlotSize] })); }} className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all">Add Slot</button>
+              </div>
+            </div>
+          </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Stock (Units)</label>
