@@ -21,6 +21,7 @@ import {
   DollarSign,
   Wallet,
   Ticket,
+  AlertTriangle,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -35,6 +36,7 @@ const navItems = [
   { name: 'Brands', href: '/brands', icon: Sparkles },
   { name: 'Categories', href: '/categories', icon: Tag },
   { name: 'Orders', href: '/orders', icon: ShoppingBag },
+  { name: 'Abandoned', href: '/abandoned-checkouts', icon: AlertTriangle },
   { name: 'Users', href: '/users', icon: Users },
   { name: 'Inventory', href: '/inventory', icon: Boxes },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
