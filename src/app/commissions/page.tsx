@@ -652,8 +652,8 @@ export default function CommissionsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-4 font-mono text-xs text-slate-500">
-                      {c.order_id?.slice(-8)}
+                    <td className="px-4 py-4 font-mono text-xs text-slate-500 break-all">
+                      {c.order_id}
                     </td>
                     <td className="px-4 py-4 font-medium text-slate-900">
                       <div className="flex flex-col">

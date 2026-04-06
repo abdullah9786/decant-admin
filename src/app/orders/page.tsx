@@ -18,7 +18,8 @@ import {
   ShoppingBag,
   Mail,
   User,
-  Phone
+  Phone,
+  Copy
 } from 'lucide-react';
 import { orderApi } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -206,7 +207,18 @@ export default function OrderManagement() {
                   const orderId = order.id || order._id;
                   return (
                   <tr key={orderId} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-4 font-bold text-slate-900">{(orderId || '').substring(0, 12)}...</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1.5 group/oid">
+                        <span className="font-mono text-xs font-bold text-slate-900">{orderId}</span>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(orderId); }}
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/oid:opacity-100 transition-all"
+                          title="Copy Order ID"
+                        >
+                          <Copy size={12} />
+                        </button>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-slate-600">{order.customer_name || order.shipping_address?.split(',')[0] || 'Anonymous'}</td>
                     <td className="px-6 py-4 text-sm text-slate-500 italic max-w-[200px] truncate">
                       {order.items?.[0]?.name}
@@ -273,7 +285,7 @@ export default function OrderManagement() {
                     <ShoppingBag size={24} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-slate-900">Order #{(selectedOrder.id || selectedOrder._id || '').substring(0, 12)}</h2>
+                    <h2 className="text-lg font-bold text-slate-900 break-all">Order #{selectedOrder.id || selectedOrder._id || ''}</h2>
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Placed on {new Date(selectedOrder.created_at).toLocaleString()}</p>
                   </div>
                </div>
@@ -371,7 +383,7 @@ export default function OrderManagement() {
                                 </div>
                                 <div>
                                    <p className="text-sm font-bold text-slate-900">{selectedOrder.customer_name || selectedOrder.shipping_address?.split(',')[0] || 'Anonymous'}</p>
-                                   <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Customer ID: {(selectedOrder.user_id || '').substring(0, 8)}</p>
+                                   <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest break-all">Customer ID: {selectedOrder.user_id || ''}</p>
                                 </div>
                              </div>
                              {(selectedOrder.customer_email || selectedOrder.customer_email === '') && (
