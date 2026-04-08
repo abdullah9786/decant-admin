@@ -130,6 +130,14 @@ export const dashboardApi = {
     getStats: () => api.get('/analytics/stats'),
 };
 
+export const bottleApi = {
+    getAll: (params?: any) => api.get('/bottles', { params }),
+    getOne: (id: string) => api.get(`/bottles/${id}`),
+    create: (data: any) => api.post('/bottles', data),
+    update: (id: string, data: any) => api.put(`/bottles/${id}`, data),
+    delete: (id: string) => api.delete(`/bottles/${id}`),
+};
+
 export const giftBoxApi = {
     getAll: (params?: any) => api.get('/gift-boxes', { params }),
     getOne: (id: string) => api.get(`/gift-boxes/${id}`),

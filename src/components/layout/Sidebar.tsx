@@ -23,6 +23,7 @@ import {
   Ticket,
   AlertTriangle,
   Gift,
+  Wine,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -37,6 +38,7 @@ const navItems = [
   { name: 'Brands', href: '/brands', icon: Sparkles },
   { name: 'Categories', href: '/categories', icon: Tag },
   { name: 'Gift Boxes', href: '/gift-boxes', icon: Gift },
+  { name: 'Bottles', href: '/bottles', icon: Wine },
   { name: 'Orders', href: '/orders', icon: ShoppingBag },
   { name: 'Abandoned', href: '/abandoned-checkouts', icon: AlertTriangle },
   { name: 'Users', href: '/users', icon: Users },

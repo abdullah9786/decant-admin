@@ -13,7 +13,7 @@ import {
   Loader2,
   CheckCircle2
 } from 'lucide-react';
-import { productApi, categoryApi, brandApi } from '@/lib/api';
+import { productApi, categoryApi, brandApi, bottleApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 
 export default function AddProductPage() {
@@ -40,12 +40,14 @@ export default function AddProductPage() {
     notes_base: '',
     notes_top_desc: '',
     notes_middle_desc: '',
-    notes_base_desc: ''
+    notes_base_desc: '',
+    bottle_ids: [] as string[],
   });
 
   const [categories, setCategories] = useState<any[]>([]);
   const [fetchingCategories, setFetchingCategories] = useState(true);
   const [brands, setBrands] = useState<any[]>([]);
+  const [allBottles, setAllBottles] = useState<any[]>([]);
   const [fetchingBrands, setFetchingBrands] = useState(true);
 
   React.useEffect(() => {
@@ -81,6 +83,34 @@ export default function AddProductPage() {
     };
     fetchBrands();
   }, []);
+
+  React.useEffect(() => {
+    bottleApi.getAll({ include_inactive: true }).then(res => {
+      setAllBottles(res.data || []);
+    }).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    if (allBottles.length === 0) return;
+    const defaultIds = allBottles
+      .filter((b: any) => b.is_default)
+      .map((b: any) => b.id || b._id);
+    if (defaultIds.length > 0) {
+      setFormData(prev => {
+        if (prev.bottle_ids.length > 0) return prev;
+        return { ...prev, bottle_ids: defaultIds };
+      });
+    }
+  }, [allBottles]);
+
+  const toggleBottle = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      bottle_ids: prev.bottle_ids.includes(id)
+        ? prev.bottle_ids.filter(b => b !== id)
+        : [...prev.bottle_ids, id],
+    }));
+  };
 
   const [variants, setVariants] = useState<{ size_ml: number; price: number; is_pack: boolean; stock: number }[]>([
     { size_ml: 5, price: 0, is_pack: false, stock: 0 },
@@ -170,6 +200,29 @@ export default function AddProductPage() {
         setError("Please add at least one variant with a price.");
         setLoading(false);
         return;
+      }
+
+      const selectedBottles = allBottles.filter((b: any) => formData.bottle_ids.includes(b.id || b._id));
+      if (selectedBottles.length > 0) {
+        const decantSizes = new Set(
+          productPayload.variants.filter((v: any) => !v.is_pack).map((v: any) => v.size_ml)
+        );
+        const allBottleSizes = new Set(selectedBottles.flatMap((b: any) => b.compatible_sizes || []));
+
+        const unmatchedBottles = selectedBottles
+          .filter((b: any) => !(b.compatible_sizes || []).some((sz: number) => decantSizes.has(sz)));
+        if (unmatchedBottles.length > 0) {
+          setError(`No matching variants for: ${unmatchedBottles.map((b: any) => b.name).join(', ')}`);
+          setLoading(false);
+          return;
+        }
+
+        const uncoveredSizes = [...decantSizes].filter(sz => !allBottleSizes.has(sz));
+        if (uncoveredSizes.length > 0) {
+          setError(`No bottle covers: ${uncoveredSizes.map(s => `${s}ml`).join(', ')}`);
+          setLoading(false);
+          return;
+        }
       }
 
       await productApi.create(productPayload);
@@ -495,6 +548,35 @@ export default function AddProductPage() {
               ))}
             </div>
           </section>
+
+          {allBottles.length > 0 && (
+          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+            <div className="text-slate-900 font-bold">Bottles</div>
+            <p className="text-xs text-slate-400">Select which bottles are available for this product. If none selected, all compatible bottles will be shown.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {allBottles.map((bottle: any) => {
+                const bid = bottle.id || bottle._id;
+                const selected = formData.bottle_ids.includes(bid);
+                return (
+                  <button key={bid} type="button" onClick={() => toggleBottle(bid)}
+                    className={`relative p-3 rounded-xl border-2 transition-all text-left ${selected ? 'border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-200' : 'border-slate-200 hover:border-indigo-300'}`}>
+                    {bottle.image_url && <img src={bottle.image_url} alt="" className="w-10 h-10 rounded-lg object-cover mb-2" />}
+                    <p className="text-xs font-bold text-slate-900">{bottle.name}</p>
+                    <p className="text-[10px] text-slate-400">{bottle.size_prices && Object.values(bottle.size_prices as Record<string, number>).some((v: number) => v > 0)
+                      ? Object.entries(bottle.size_prices as Record<string, number>).sort(([a], [b]) => Number(a) - Number(b)).map(([sz, pr]) => `${sz}ml: ${pr > 0 ? `₹${pr}` : 'Free'}`).join(' · ')
+                      : 'Free'}</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(bottle.compatible_sizes || []).map((s: number) => (
+                        <span key={s} className="text-[8px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{s}ml</span>
+                      ))}
+                    </div>
+                    {bottle.is_default && <span className="absolute top-2 right-2 text-[8px] font-bold bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">Default</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+          )}
         </div>
 
         <div className="xl:col-span-5 space-y-6">
