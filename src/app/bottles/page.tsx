@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, AlertTriangle, Wine } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { PerfumeBottle } from '@/components/icons/PerfumeBottle';
 import { bottleApi } from '@/lib/api';
 import { clsx } from 'clsx';
 
@@ -101,7 +102,7 @@ export default function BottleList() {
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center overflow-hidden">
-                            {bottle.image_url ? <img src={bottle.image_url} alt="" className="w-full h-full object-cover" /> : <Wine size={18} className="text-indigo-400" />}
+                            {bottle.image_url ? <img src={bottle.image_url} alt="" className="w-full h-full object-cover" /> : <PerfumeBottle size={18} className="text-indigo-400" />}
                           </div>
                           <div>
                             <p className="font-bold text-slate-900">{bottle.name}</p>
