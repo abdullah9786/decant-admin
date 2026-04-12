@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, AlertTriangle, GripVertical } from 'lucide-react';
 import { PerfumeBottle } from '@/components/icons/PerfumeBottle';
 import { bottleApi } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -12,6 +12,8 @@ export default function BottleList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const fetchBottles = async () => {
     setLoading(true);
@@ -32,7 +34,7 @@ export default function BottleList() {
     setDeletingId(id);
     try {
       await bottleApi.delete(id);
-      setBottles(bottles.filter(b => (b.id || b._id) !== id));
+      setBottles(bottles.filter(b => getId(b) !== id));
     } catch (err) {
       console.error("Error deleting bottle", err);
       alert('Failed to delete bottle');
@@ -41,11 +43,57 @@ export default function BottleList() {
     }
   };
 
-  const filtered = bottles.filter(b =>
+  const getId = (b: any) => b.id || b._id;
+
+  const sortedBottles = [...bottles].sort((a, b) => {
+    const aOrder = a.sort_order ?? 0;
+    const bOrder = b.sort_order ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bCreated - aCreated;
+  });
+
+  const filtered = sortedBottles.filter(b =>
     b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getId = (b: any) => b.id || b._id;
+  const handleDrop = async (targetId: string) => {
+    if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
+    const current = [...sortedBottles];
+    const fromIndex = current.findIndex((b) => getId(b) === draggingId);
+    const toIndex = current.findIndex((b) => getId(b) === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const prevOrderMap = new Map(current.map((b) => [getId(b), b.sort_order ?? 0]));
+    const moved = current.splice(fromIndex, 1)[0];
+    current.splice(toIndex, 0, moved);
+
+    const updated = current.map((b, idx) => ({ ...b, sort_order: idx + 1 }));
+    setBottles((prev) =>
+      prev.map((b) => {
+        const found = updated.find((u) => getId(u) === getId(b));
+        return found ? { ...b, sort_order: found.sort_order } : b;
+      })
+    );
+
+    const changed = updated.filter((b) => prevOrderMap.get(getId(b)) !== b.sort_order);
+    if (changed.length === 0) return;
+
+    setSavingOrder(true);
+    try {
+      await Promise.all(
+        changed.map((b) => bottleApi.update(getId(b), { sort_order: b.sort_order }))
+      );
+    } catch (err) {
+      console.error("Error updating bottle order", err);
+      alert('Failed to save order. Please try again.');
+      fetchBottles();
+    } finally {
+      setSavingOrder(false);
+      setDraggingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -53,6 +101,11 @@ export default function BottleList() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Bottles</h1>
           <p className="text-slate-500 mt-1">Manage bottle types for decant products.</p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
+            Drag rows to reorder
+            {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {savingOrder ? ' • saving…' : ''}
+          </p>
         </div>
         <div className="flex space-x-3">
           <button onClick={fetchBottles} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all" title="Refresh">
@@ -86,9 +139,11 @@ export default function BottleList() {
             <table className="w-full text-left">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Move</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Bottle</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Compatible Sizes</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Price</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Order</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Default</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Actions</th>
@@ -98,7 +153,22 @@ export default function BottleList() {
                 {filtered.map((bottle) => {
                   const id = getId(bottle);
                   return (
-                    <tr key={id} className="hover:bg-slate-50/50 transition-colors group">
+                    <tr
+                      key={id}
+                      draggable={searchTerm.trim().length === 0}
+                      onDragStart={() => setDraggingId(id)}
+                      onDragOver={(e) => {
+                        if (searchTerm.trim().length === 0) e.preventDefault();
+                      }}
+                      onDrop={() => handleDrop(id)}
+                      className={clsx(
+                        "hover:bg-slate-50/50 transition-colors group",
+                        draggingId === id && "bg-indigo-50/60"
+                      )}
+                    >
+                      <td className="px-4 py-4 text-slate-400">
+                        <GripVertical size={16} className={clsx("cursor-grab", searchTerm.trim().length > 0 && "opacity-40 cursor-not-allowed")} />
+                      </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center overflow-hidden">
@@ -127,6 +197,9 @@ export default function BottleList() {
                         ) : (
                           <span className="text-slate-400 text-xs italic">Free</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-600">
+                        {bottle.sort_order ?? 0}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         {bottle.is_default && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-50 text-amber-600">Default</span>}

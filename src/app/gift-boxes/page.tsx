@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, AlertTriangle, Gift } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, AlertTriangle, Gift, GripVertical } from 'lucide-react';
 import { giftBoxApi } from '@/lib/api';
 import { clsx } from 'clsx';
 
@@ -11,6 +11,8 @@ export default function GiftBoxList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const fetchBoxes = async () => {
     setLoading(true);
@@ -31,7 +33,7 @@ export default function GiftBoxList() {
     setDeletingId(id);
     try {
       await giftBoxApi.delete(id);
-      setBoxes(boxes.filter(b => (b.id || b._id) !== id));
+      setBoxes(boxes.filter(b => getId(b) !== id));
     } catch (err) {
       console.error("Error deleting gift box", err);
       alert('Failed to delete gift box');
@@ -40,11 +42,57 @@ export default function GiftBoxList() {
     }
   };
 
-  const filtered = boxes.filter(b =>
+  const getId = (b: any) => b.id || b._id;
+
+  const sortedBoxes = [...boxes].sort((a, b) => {
+    const aOrder = a.sort_order ?? 0;
+    const bOrder = b.sort_order ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bCreated - aCreated;
+  });
+
+  const filtered = sortedBoxes.filter(b =>
     b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getId = (b: any) => b.id || b._id;
+  const handleDrop = async (targetId: string) => {
+    if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
+    const current = [...sortedBoxes];
+    const fromIndex = current.findIndex((b) => getId(b) === draggingId);
+    const toIndex = current.findIndex((b) => getId(b) === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const prevOrderMap = new Map(current.map((b) => [getId(b), b.sort_order ?? 0]));
+    const moved = current.splice(fromIndex, 1)[0];
+    current.splice(toIndex, 0, moved);
+
+    const updated = current.map((b, idx) => ({ ...b, sort_order: idx + 1 }));
+    setBoxes((prev) =>
+      prev.map((b) => {
+        const found = updated.find((u) => getId(u) === getId(b));
+        return found ? { ...b, sort_order: found.sort_order } : b;
+      })
+    );
+
+    const changed = updated.filter((b) => prevOrderMap.get(getId(b)) !== b.sort_order);
+    if (changed.length === 0) return;
+
+    setSavingOrder(true);
+    try {
+      await Promise.all(
+        changed.map((b) => giftBoxApi.update(getId(b), { sort_order: b.sort_order }))
+      );
+    } catch (err) {
+      console.error("Error updating gift box order", err);
+      alert('Failed to save order. Please try again.');
+      fetchBoxes();
+    } finally {
+      setSavingOrder(false);
+      setDraggingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -52,6 +100,11 @@ export default function GiftBoxList() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Gift Boxes</h1>
           <p className="text-slate-500 mt-1">Manage gift box configurations and stock.</p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
+            Drag rows to reorder
+            {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {savingOrder ? ' • saving…' : ''}
+          </p>
         </div>
         <div className="flex space-x-3">
           <button onClick={fetchBoxes} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all" title="Refresh">
@@ -85,12 +138,14 @@ export default function GiftBoxList() {
             <table className="w-full text-left">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Move</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Name</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Size</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Slots</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Box Price</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Tier</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Stock</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Order</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Actions</th>
                 </tr>
@@ -99,7 +154,22 @@ export default function GiftBoxList() {
                 {filtered.map((box) => {
                   const id = getId(box);
                   return (
-                    <tr key={id} className="hover:bg-slate-50/50 transition-colors group">
+                    <tr
+                      key={id}
+                      draggable={searchTerm.trim().length === 0}
+                      onDragStart={() => setDraggingId(id)}
+                      onDragOver={(e) => {
+                        if (searchTerm.trim().length === 0) e.preventDefault();
+                      }}
+                      onDrop={() => handleDrop(id)}
+                      className={clsx(
+                        "hover:bg-slate-50/50 transition-colors group",
+                        draggingId === id && "bg-indigo-50/60"
+                      )}
+                    >
+                      <td className="px-4 py-4 text-slate-400">
+                        <GripVertical size={16} className={clsx("cursor-grab", searchTerm.trim().length > 0 && "opacity-40 cursor-not-allowed")} />
+                      </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
@@ -119,6 +189,9 @@ export default function GiftBoxList() {
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span className={clsx("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase", box.stock < 5 ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600")}>{box.stock} units</span>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-600">
+                        {box.sort_order ?? 0}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span className={clsx("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase", box.is_active ? "bg-green-50 text-green-600" : "bg-slate-100 text-slate-400")}>{box.is_active ? 'Active' : 'Inactive'}</span>
