@@ -33,6 +33,7 @@ export default function OrderManagement() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [viewLoading, setViewLoading] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState<{ itemIndex: number; itemName: string } | null>(null);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -326,7 +327,29 @@ export default function OrderManagement() {
                                       <tr key={i}>
                                          <td className="px-6 py-4">
                                             <p className="font-bold text-slate-900 text-sm">{item.name}</p>
-                                            <p className="text-xs text-slate-400 font-medium">{item.size_ml}ml Decant</p>
+                                            <p className="text-xs text-slate-400 font-medium">
+                                              {item.size_ml}ml {item.is_pack ? 'Sealed Pack' : 'Decant'}
+                                            </p>
+                                            {item.bottle_name && (
+                                              <p className="text-[10px] text-indigo-500 font-bold mt-0.5">
+                                                Bottle: {item.bottle_name}
+                                                {item.bottle_price > 0 && <span className="text-slate-400 font-medium"> (+₹{item.bottle_price})</span>}
+                                              </p>
+                                            )}
+                                            {item.gift_box_id && (
+                                              <div className="mt-1">
+                                                <p className="text-[10px] text-amber-600 font-bold">Gift Box</p>
+                                                {item.selected_products?.length > 0 && (
+                                                  <div className="mt-0.5 space-y-0.5">
+                                                    {item.selected_products.map((sp: any, j: number) => (
+                                                      <p key={j} className="text-[10px] text-slate-400">
+                                                        • {sp.name} ({sp.size_ml}ml)
+                                                      </p>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
                                          </td>
                                          <td className="px-6 py-4 text-center font-bold text-slate-600 text-sm">x{item.quantity}</td>
                                          <td className="px-6 py-4 text-center">
@@ -343,7 +366,7 @@ export default function OrderManagement() {
                                          <td className="px-6 py-4 text-right font-bold text-slate-900 text-sm">₹{item.price * item.quantity}</td>
                                          <td className="px-6 py-4 text-right">
                                             <button
-                                              onClick={() => handleItemCancel(i)}
+                                              onClick={() => setCancelConfirm({ itemIndex: i, itemName: item.name })}
                                               disabled={
                                                 updatingId === (selectedOrder.id || selectedOrder._id) ||
                                                 item.status === 'cancelled' ||
@@ -470,6 +493,43 @@ export default function OrderManagement() {
                >
                   Close
                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Item Confirmation Modal */}
+      {cancelConfirm && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+                <AlertTriangle size={24} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Cancel Item?</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Are you sure you want to cancel <span className="font-bold text-slate-700">{cancelConfirm.itemName}</span>? This will trigger a refund and cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex border-t border-slate-100">
+              <button
+                onClick={() => setCancelConfirm(null)}
+                className="flex-1 px-4 py-3.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Keep Item
+              </button>
+              <button
+                onClick={async () => {
+                  const idx = cancelConfirm.itemIndex;
+                  setCancelConfirm(null);
+                  await handleItemCancel(idx);
+                }}
+                className="flex-1 px-4 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors border-l border-slate-100"
+              >
+                Yes, Cancel
+              </button>
             </div>
           </div>
         </div>
