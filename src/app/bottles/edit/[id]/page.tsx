@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, AlertTriangle, Loader2, X } from 'lucide-react';
-import { bottleApi } from '@/lib/api';
+import { ArrowLeft, CheckCircle2, AlertTriangle, Loader2, X, Search } from 'lucide-react';
+import { bottleApi, productApi } from '@/lib/api';
+import { clsx } from 'clsx';
 
 export default function EditBottle() {
   const router = useRouter();
@@ -14,6 +15,11 @@ export default function EditBottle() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newSize, setNewSize] = useState(5);
+
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [initialProductIds, setInitialProductIds] = useState<string[]>([]);
+  const [productSearch, setProductSearch] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -27,11 +33,16 @@ export default function EditBottle() {
     sort_order: 0,
   });
 
+  const getId = (p: any) => p.id || p._id;
+
   useEffect(() => {
-    const fetchBottle = async () => {
+    const fetchData = async () => {
       try {
-        const res = await bottleApi.getOne(id);
-        const b = res.data;
+        const [bottleRes, productsRes] = await Promise.all([
+          bottleApi.getOne(id),
+          productApi.getAll({ include_inactive: true }),
+        ]);
+        const b = bottleRes.data;
         setFormData({
           name: b.name || '',
           slug: b.slug || '',
@@ -43,19 +54,47 @@ export default function EditBottle() {
           is_active: b.is_active !== undefined ? b.is_active : true,
           sort_order: b.sort_order || 0,
         });
+
+        const products = productsRes.data;
+        setAllProducts(products);
+
+        const mapped = products
+          .filter((p: any) => (p.bottle_ids || []).includes(id))
+          .map((p: any) => getId(p));
+        setSelectedProductIds(mapped);
+        setInitialProductIds(mapped);
       } catch {
-        setError('Failed to load bottle.');
+        setError('Failed to load data.');
       } finally {
         setLoading(false);
       }
     };
-    fetchBottle();
+    fetchData();
   }, [id]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
     setFormData(prev => ({ ...prev, [name]: val }));
+  };
+
+  const filteredProducts = allProducts.filter(p =>
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+    (p.brand || '').toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  const toggleProduct = (pid: string) => {
+    setSelectedProductIds(prev =>
+      prev.includes(pid) ? prev.filter(x => x !== pid) : [...prev, pid]
+    );
+  };
+
+  const selectAll = () => {
+    setSelectedProductIds(filteredProducts.map(p => getId(p)));
+  };
+
+  const removeAll = () => {
+    setSelectedProductIds([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,6 +112,28 @@ export default function EditBottle() {
         sort_order: parseInt(String(formData.sort_order)),
       };
       await bottleApi.update(id, payload);
+
+      const added = selectedProductIds.filter(pid => !initialProductIds.includes(pid));
+      const removed = initialProductIds.filter(pid => !selectedProductIds.includes(pid));
+
+      const updates: Promise<any>[] = [];
+
+      for (const pid of added) {
+        const product = allProducts.find(p => getId(p) === pid);
+        const existing: string[] = product?.bottle_ids || [];
+        if (!existing.includes(id)) {
+          updates.push(productApi.update(pid, { bottle_ids: [...existing, id] }));
+        }
+      }
+
+      for (const pid of removed) {
+        const product = allProducts.find(p => getId(p) === pid);
+        const existing: string[] = product?.bottle_ids || [];
+        updates.push(productApi.update(pid, { bottle_ids: existing.filter(bid => bid !== id) }));
+      }
+
+      if (updates.length > 0) await Promise.all(updates);
+
       setSuccess(true);
       setTimeout(() => router.push('/bottles'), 1500);
     } catch (err: any) {
@@ -206,6 +267,63 @@ export default function EditBottle() {
                 <span className="text-sm font-bold text-slate-700">Active</span>
               </label>
             </div>
+          </div>
+        </section>
+
+        {/* Map to Products */}
+        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-slate-900 font-bold">Map to Products</div>
+              <p className="text-xs text-slate-400 mt-0.5">{selectedProductIds.length} of {allProducts.length} selected</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button type="button" onClick={selectAll} className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all">Select All</button>
+              <button type="button" onClick={removeAll} className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all">Remove All</button>
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <input
+              type="text"
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              placeholder="Search products..."
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+            />
+          </div>
+          <div className="max-h-72 overflow-y-auto space-y-1 border border-slate-100 rounded-xl p-2">
+            {filteredProducts.length === 0 ? (
+              <p className="text-xs text-slate-400 italic text-center py-4">No products found</p>
+            ) : filteredProducts.map(product => {
+              const pid = getId(product);
+              const isSelected = selectedProductIds.includes(pid);
+              return (
+                <button
+                  key={pid}
+                  type="button"
+                  onClick={() => toggleProduct(pid)}
+                  className={clsx(
+                    "w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all",
+                    isSelected ? "bg-indigo-50 border border-indigo-200" : "hover:bg-slate-50 border border-transparent"
+                  )}
+                >
+                  <div className={clsx(
+                    "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                    isSelected ? "bg-indigo-600 border-indigo-600" : "border-slate-300"
+                  )}>
+                    {isSelected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                  </div>
+                  <div className="w-8 h-8 rounded bg-slate-100 overflow-hidden flex-shrink-0">
+                    {product.image_url ? <img src={product.image_url} alt="" className="w-full h-full object-cover" /> : <span className="text-[8px] text-slate-400 flex items-center justify-center h-full">IMG</span>}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-slate-900 truncate">{product.name}</p>
+                    <p className="text-[10px] text-slate-400">{product.brand}</p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
 
