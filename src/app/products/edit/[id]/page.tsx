@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   Save
 } from 'lucide-react';
-import { productApi, fragranceFamilyApi, brandApi, bottleApi } from '@/lib/api';
+import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 
 export default function EditProductPage() {
@@ -47,9 +47,11 @@ export default function EditProductPage() {
     notes_middle_desc: '',
     notes_base_desc: '',
     bottle_ids: [] as string[],
+    category_ids: [] as string[],
   });
 
   const [allBottles, setAllBottles] = useState<any[]>([]);
+  const [allCategories, setAllCategories] = useState<any[]>([]);
   const [variants, setVariants] = useState<any[]>([]);
   const [basePrice100ml, setBasePrice100ml] = useState<number | string>('');
 
@@ -96,6 +98,7 @@ export default function EditProductPage() {
           notes_middle_desc: product.notes_middle_desc || '',
           notes_base_desc: product.notes_base_desc || '',
           bottle_ids: product.bottle_ids || [],
+          category_ids: product.category_ids || [],
         });
         setVariants(product.variants || []);
       } catch (err: any) {
@@ -139,6 +142,7 @@ export default function EditProductPage() {
       fetchFamilies();
       fetchBrands();
       bottleApi.getAll({ include_inactive: true }).then(res => setAllBottles(res.data)).catch(() => {});
+      categoryApi.getAll({ include_inactive: true }).then(res => setAllCategories(res.data || [])).catch(() => {});
     }
   }, [productId]);
 
@@ -148,6 +152,15 @@ export default function EditProductPage() {
       bottle_ids: prev.bottle_ids.includes(id)
         ? prev.bottle_ids.filter(b => b !== id)
         : [...prev.bottle_ids, id],
+    }));
+  };
+
+  const toggleCategory = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      category_ids: prev.category_ids.includes(id)
+        ? prev.category_ids.filter(c => c !== id)
+        : [...prev.category_ids, id],
     }));
   };
 
@@ -596,6 +609,25 @@ export default function EditProductPage() {
                       ))}
                     </div>
                     {bottle.is_default && <span className="absolute top-2 right-2 text-[8px] font-bold bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">Default</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+          )}
+
+          {allCategories.length > 0 && (
+          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+            <div className="text-slate-900 font-bold">Categories</div>
+            <p className="text-xs text-slate-400">Assign this product to one or more categories.</p>
+            <div className="flex flex-wrap gap-2">
+              {allCategories.filter((c: any) => c.is_active !== false).map((cat: any) => {
+                const cid = cat._id;
+                const selected = formData.category_ids.includes(cid);
+                return (
+                  <button key={cid} type="button" onClick={() => toggleCategory(cid)}
+                    className={`px-4 py-2 rounded-lg border-2 text-sm font-bold transition-all ${selected ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-indigo-300'}`}>
+                    {cat.name}
                   </button>
                 );
               })}

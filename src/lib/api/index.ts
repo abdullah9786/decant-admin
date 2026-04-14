@@ -119,6 +119,14 @@ export const fragranceFamilyApi = {
     delete: (id: string) => api.delete(`/fragrance-families/${id}`),
 };
 
+export const categoryApi = {
+    getAll: (params?: any) => api.get('/categories', { params }),
+    getOne: (id: string) => api.get(`/categories/${id}`),
+    create: (data: any) => api.post('/categories', data),
+    update: (id: string, data: any) => api.put(`/categories/${id}`, data),
+    delete: (id: string) => api.delete(`/categories/${id}`),
+};
+
 export const brandApi = {
     getAll: () => api.get('/brands'),
     create: (data: any) => api.post('/brands', data),

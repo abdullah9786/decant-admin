@@ -13,7 +13,7 @@ import {
   Loader2,
   CheckCircle2
 } from 'lucide-react';
-import { productApi, fragranceFamilyApi, brandApi, bottleApi } from '@/lib/api';
+import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 
 export default function AddProductPage() {
@@ -42,10 +42,12 @@ export default function AddProductPage() {
     notes_middle_desc: '',
     notes_base_desc: '',
     bottle_ids: [] as string[],
+    category_ids: [] as string[],
   });
 
   const [fragranceFamilies, setFragranceFamilies] = useState<any[]>([]);
   const [fetchingFamilies, setFetchingFamilies] = useState(true);
+  const [allCategories, setAllCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [allBottles, setAllBottles] = useState<any[]>([]);
   const [fetchingBrands, setFetchingBrands] = useState(true);
@@ -88,6 +90,9 @@ export default function AddProductPage() {
     bottleApi.getAll({ include_inactive: true }).then(res => {
       setAllBottles(res.data || []);
     }).catch(() => {});
+    categoryApi.getAll({ include_inactive: true }).then(res => {
+      setAllCategories(res.data || []);
+    }).catch(() => {});
   }, []);
 
   React.useEffect(() => {
@@ -109,6 +114,15 @@ export default function AddProductPage() {
       bottle_ids: prev.bottle_ids.includes(id)
         ? prev.bottle_ids.filter(b => b !== id)
         : [...prev.bottle_ids, id],
+    }));
+  };
+
+  const toggleCategory = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      category_ids: prev.category_ids.includes(id)
+        ? prev.category_ids.filter(c => c !== id)
+        : [...prev.category_ids, id],
     }));
   };
 
@@ -571,6 +585,25 @@ export default function AddProductPage() {
                       ))}
                     </div>
                     {bottle.is_default && <span className="absolute top-2 right-2 text-[8px] font-bold bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">Default</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+          )}
+
+          {allCategories.length > 0 && (
+          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+            <div className="text-slate-900 font-bold">Categories</div>
+            <p className="text-xs text-slate-400">Assign this product to one or more categories. Products can belong to multiple categories.</p>
+            <div className="flex flex-wrap gap-2">
+              {allCategories.filter((c: any) => c.is_active !== false).map((cat: any) => {
+                const cid = cat._id;
+                const selected = formData.category_ids.includes(cid);
+                return (
+                  <button key={cid} type="button" onClick={() => toggleCategory(cid)}
+                    className={`px-4 py-2 rounded-lg border-2 text-sm font-bold transition-all ${selected ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-indigo-300'}`}>
+                    {cat.name}
                   </button>
                 );
               })}
