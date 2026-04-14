@@ -13,7 +13,7 @@ import {
   Loader2,
   CheckCircle2
 } from 'lucide-react';
-import { productApi, categoryApi, brandApi, bottleApi } from '@/lib/api';
+import { productApi, fragranceFamilyApi, brandApi, bottleApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 
 export default function AddProductPage() {
@@ -25,7 +25,7 @@ export default function AddProductPage() {
   const [formData, setFormData] = useState({
     name: '',
     brand: '',
-    category: '',
+    fragrance_family: '',
     description: '',
     image_url: '', // Primary Image
     images: [] as string[], // Additional Images
@@ -44,27 +44,27 @@ export default function AddProductPage() {
     bottle_ids: [] as string[],
   });
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [fetchingCategories, setFetchingCategories] = useState(true);
+  const [fragranceFamilies, setFragranceFamilies] = useState<any[]>([]);
+  const [fetchingFamilies, setFetchingFamilies] = useState(true);
   const [brands, setBrands] = useState<any[]>([]);
   const [allBottles, setAllBottles] = useState<any[]>([]);
   const [fetchingBrands, setFetchingBrands] = useState(true);
 
   React.useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchFamilies = async () => {
       try {
-        const response = await categoryApi.getAll();
-        setCategories(response.data);
+        const response = await fragranceFamilyApi.getAll();
+        setFragranceFamilies(response.data);
         if (response.data.length > 0) {
-          setFormData(prev => ({ ...prev, category: response.data[0].name }));
+          setFormData(prev => ({ ...prev, fragrance_family: response.data[0].name }));
         }
       } catch (err) {
-        console.error("Error fetching categories:", err);
+        console.error("Error fetching fragrance families:", err);
       } finally {
-        setFetchingCategories(false);
+        setFetchingFamilies(false);
       }
     };
-    fetchCategories();
+    fetchFamilies();
   }, []);
 
   React.useEffect(() => {
@@ -321,23 +321,23 @@ export default function AddProductPage() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Category</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Fragrance Family</label>
                   <select 
-                    name="category"
-                    value={formData.category}
+                    name="fragrance_family"
+                    value={formData.fragrance_family}
                     onChange={handleInputChange}
-                    disabled={fetchingCategories}
+                    disabled={fetchingFamilies}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer disabled:opacity-50"
                   >
-                    {fetchingCategories ? (
-                      <option>Loading categories...</option>
+                    {fetchingFamilies ? (
+                      <option>Loading fragrance families...</option>
                     ) : (
-                      categories.map((cat: any) => (
-                        <option key={cat._id} value={cat.name}>{cat.name}</option>
+                      fragranceFamilies.map((fam: any) => (
+                        <option key={fam._id} value={fam.name}>{fam.name}</option>
                       ))
                     )}
-                    {categories.length === 0 && !fetchingCategories && (
-                      <option value="">No categories found</option>
+                    {fragranceFamilies.length === 0 && !fetchingFamilies && (
+                      <option value="">No fragrance families found</option>
                     )}
                   </select>
                 </div>

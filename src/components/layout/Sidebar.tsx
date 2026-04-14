@@ -36,7 +36,7 @@ const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Products', href: '/products', icon: Package },
   { name: 'Brands', href: '/brands', icon: Sparkles },
-  { name: 'Categories', href: '/categories', icon: Tag },
+  { name: 'Fragrance Families', href: '/fragrance-families', icon: Tag },
   { name: 'Gift Boxes', href: '/gift-boxes', icon: Gift },
   { name: 'Bottles', href: '/bottles', icon: PerfumeBottle },
   { name: 'Orders', href: '/orders', icon: ShoppingBag },

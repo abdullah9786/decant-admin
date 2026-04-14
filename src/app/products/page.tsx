@@ -174,7 +174,7 @@ export default function ProductList() {
                   <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Move</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Product</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Brand</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Category</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Family</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Order</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Variants</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Stock Status</th>
@@ -222,7 +222,7 @@ export default function ProductList() {
                       <td className="px-6 py-4 text-sm text-slate-600">{product.brand}</td>
                       <td className="px-6 py-4 text-sm text-slate-600">
                         <span className="px-2 py-1 bg-slate-100 rounded text-[10px] font-bold uppercase text-slate-500">
-                            {product.category || 'Niche'}
+                            {product.fragrance_family || 'Uncategorized'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600 font-bold">

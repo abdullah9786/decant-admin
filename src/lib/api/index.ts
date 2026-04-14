@@ -112,11 +112,11 @@ export const userApi = {
     createAdmin: (data: any) => api.post('/users/create-admin', data),
 };
 
-export const categoryApi = {
-    getAll: () => api.get('/categories'),
-    create: (data: any) => api.post('/categories', data),
-    update: (id: string, data: any) => api.put(`/categories/${id}`, data),
-    delete: (id: string) => api.delete(`/categories/${id}`),
+export const fragranceFamilyApi = {
+    getAll: () => api.get('/fragrance-families'),
+    create: (data: any) => api.post('/fragrance-families', data),
+    update: (id: string, data: any) => api.put(`/fragrance-families/${id}`, data),
+    delete: (id: string) => api.delete(`/fragrance-families/${id}`),
 };
 
 export const brandApi = {

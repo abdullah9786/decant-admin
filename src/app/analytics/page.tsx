@@ -64,8 +64,8 @@ export default function AnalyticsPage() {
 
   // Use real data from backend
   const dailyStats = stats?.daily_stats || [];
-  const categoryStats = stats?.category_stats || [];
-  const totalCategoryValue = categoryStats.reduce((acc: number, item: any) => acc + item.value, 0);
+  const familyStats = stats?.family_stats || [];
+  const totalFamilyValue = familyStats.reduce((acc: number, item: any) => acc + item.value, 0);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -184,22 +184,22 @@ export default function AnalyticsPage() {
                 <PieChartIcon size={20} />
               </div>
               <div>
-                <h3 className="font-bold text-slate-900">Category Mix</h3>
+                <h3 className="font-bold text-slate-900">Fragrance Family Mix</h3>
                 <p className="text-xs text-slate-500">Top selling fragrance families</p>
               </div>
             </div>
             <div className="h-[280px] w-full mt-4">
-              {categoryStats.length > 0 ? (
+              {familyStats.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={categoryStats}
+                      data={familyStats}
                       innerRadius={60}
                       outerRadius={80}
                       paddingAngle={8}
                       dataKey="value"
                     >
-                      {categoryStats.map((entry: any, index: number) => (
+                      {familyStats.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                       ))}
                     </Pie>
@@ -212,19 +212,19 @@ export default function AnalyticsPage() {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                   <PieChartIcon size={40} className="mb-2 opacity-50" />
-                  <p className="text-sm font-medium">No sales categories yet</p>
+                  <p className="text-sm font-medium">No fragrance family data yet</p>
                 </div>
               )}
             </div>
             <div className="mt-8 space-y-4">
-               {categoryStats.map((item: any, id: number) => (
+               {familyStats.map((item: any, id: number) => (
                  <div key={id} className="flex items-center justify-between text-xs font-bold">
                     <div className="flex items-center space-x-2">
                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: COLORS[id % COLORS.length]}} />
                        <span className="text-slate-500 uppercase tracking-widest">{item.name}</span>
                     </div>
                     <span className="text-slate-900">
-                      {totalCategoryValue > 0 ? ((item.value / totalCategoryValue) * 100).toFixed(0) : 0}%
+                      {totalFamilyValue > 0 ? ((item.value / totalFamilyValue) * 100).toFixed(0) : 0}%
                     </span>
                  </div>
                ))}
@@ -241,7 +241,7 @@ export default function AnalyticsPage() {
                </div>
                <h3 className="text-2xl font-bold mb-2">Real-time Insights Active</h3>
                <p className="text-indigo-100 text-sm leading-relaxed max-w-sm mb-6">
-                  Your analytics are now connected directly to your MongoDB database. Sales trends, category mixes, and inventory alerts refresh automatically as your customers shop.
+                  Your analytics are now connected directly to your MongoDB database. Sales trends, fragrance family mixes, and inventory alerts refresh automatically as your customers shop.
                </p>
                <div className="flex items-center space-x-4">
                   <div className="px-4 py-2 bg-white/20 rounded-lg text-xs font-bold uppercase tracking-widest backdrop-blur-sm">

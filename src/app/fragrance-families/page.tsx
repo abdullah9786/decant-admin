@@ -14,18 +14,17 @@ import {
   X,
   GripVertical
 } from 'lucide-react';
-import { categoryApi } from '@/lib/api';
+import { fragranceFamilyApi } from '@/lib/api';
 import { clsx } from 'clsx';
 
-export default function CategoryManagement() {
-  const [categories, setCategories] = useState<any[]>([]);
+export default function FragranceFamilyManagement() {
+  const [families, setFamilies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
-  const [currentCategory, setCurrentCategory] = useState({ 
+  const [currentFamily, setCurrentFamily] = useState({ 
     name: '', 
     description: '', 
     icon: '', 
@@ -39,39 +38,39 @@ export default function CategoryManagement() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  const fetchCategories = async () => {
+  const fetchFamilies = async () => {
     setLoading(true);
     try {
-      const response = await categoryApi.getAll();
-      setCategories(response.data);
+      const response = await fragranceFamilyApi.getAll();
+      setFamilies(response.data);
     } catch (err) {
-      console.error("Error fetching categories:", err);
+      console.error("Error fetching fragrance families:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCategories();
+    fetchFamilies();
   }, []);
 
   const openAddModal = () => {
     setModalMode('add');
-    setCurrentCategory({ name: '', description: '', icon: '', image_url: '', is_featured: false, sort_order: 0 });
+    setCurrentFamily({ name: '', description: '', icon: '', image_url: '', is_featured: false, sort_order: 0 });
     setModalError(null);
     setIsModalOpen(true);
   };
 
-  const openEditModal = (category: any) => {
+  const openEditModal = (family: any) => {
     setModalMode('edit');
-    setEditingId(category._id);
-    setCurrentCategory({ 
-      name: category.name, 
-      description: category.description || '', 
-      icon: category.icon || '',
-      image_url: category.image_url || '',
-      is_featured: category.is_featured || false,
-      sort_order: category.sort_order ?? 0
+    setEditingId(family._id);
+    setCurrentFamily({ 
+      name: family.name, 
+      description: family.description || '', 
+      icon: family.icon || '',
+      image_url: family.image_url || '',
+      is_featured: family.is_featured || false,
+      sort_order: family.sort_order ?? 0
     });
     setModalError(null);
     setIsModalOpen(true);
@@ -80,7 +79,7 @@ export default function CategoryManagement() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
-    setCurrentCategory({ name: '', description: '', icon: '', image_url: '', is_featured: false, sort_order: 0 });
+    setCurrentFamily({ name: '', description: '', icon: '', image_url: '', is_featured: false, sort_order: 0 });
   };
 
   const handleModalSubmit = async (e: React.FormEvent) => {
@@ -90,37 +89,37 @@ export default function CategoryManagement() {
 
     try {
       if (modalMode === 'add') {
-        await categoryApi.create(currentCategory);
+        await fragranceFamilyApi.create(currentFamily);
       } else if (editingId) {
-        await categoryApi.update(editingId, currentCategory);
+        await fragranceFamilyApi.update(editingId, currentFamily);
       }
-      await fetchCategories();
+      await fetchFamilies();
       closeModal();
     } catch (err: any) {
-      console.error("Error saving category:", err);
-      setModalError(err.response?.data?.detail || "Failed to save category. Please ensure the name is unique.");
+      console.error("Error saving fragrance family:", err);
+      setModalError(err.response?.data?.detail || "Failed to save fragrance family. Please ensure the name is unique.");
     } finally {
       setModalLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this category? Products linked to this category might need updating.")) return;
+    if (!window.confirm("Are you sure you want to delete this fragrance family? Products linked to it might need updating.")) return;
     
     try {
-      await categoryApi.delete(id);
-      await fetchCategories();
+      await fragranceFamilyApi.delete(id);
+      await fetchFamilies();
     } catch (err) {
-      console.error("Error deleting category:", err);
-      alert("Failed to delete category.");
+      console.error("Error deleting fragrance family:", err);
+      alert("Failed to delete fragrance family.");
     }
   };
 
-  const filteredCategories = categories.filter(cat =>
-    cat.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredFamilies = families.filter(f =>
+    f.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const sortedCategories = [...filteredCategories].sort((a, b) => {
+  const sortedFamilies = [...filteredFamilies].sort((a, b) => {
     const aOrder = a.sort_order ?? 0;
     const bOrder = b.sort_order ?? 0;
     if (aOrder !== bOrder) return aOrder - bOrder;
@@ -129,7 +128,7 @@ export default function CategoryManagement() {
 
   const handleDrop = async (targetId: string) => {
     if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
-    const current = [...categories].sort((a, b) => {
+    const current = [...families].sort((a, b) => {
       const aOrder = a.sort_order ?? 0;
       const bOrder = b.sort_order ?? 0;
       if (aOrder !== bOrder) return aOrder - bOrder;
@@ -144,7 +143,7 @@ export default function CategoryManagement() {
     current.splice(toIndex, 0, moved);
     const updated = current.map((c, idx) => ({ ...c, sort_order: idx + 1 }));
 
-    setCategories((prev) =>
+    setFamilies((prev) =>
       prev.map((c) => {
         const found = updated.find((u) => u._id === c._id);
         return found ? { ...c, sort_order: found.sort_order } : c;
@@ -157,12 +156,12 @@ export default function CategoryManagement() {
     setSavingOrder(true);
     try {
       await Promise.all(
-        changed.map((c) => categoryApi.update(c._id, { sort_order: c.sort_order }))
+        changed.map((c) => fragranceFamilyApi.update(c._id, { sort_order: c.sort_order }))
       );
     } catch (err) {
-      console.error("Error updating category order", err);
+      console.error("Error updating fragrance family order", err);
       alert('Failed to save order. Please try again.');
-      await fetchCategories();
+      await fetchFamilies();
     } finally {
       setSavingOrder(false);
       setDraggingId(null);
@@ -173,8 +172,8 @@ export default function CategoryManagement() {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Category Management</h1>
-          <p className="text-slate-500 mt-1">Create and manage fragrance categories for your products.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Fragrance Families</h1>
+          <p className="text-slate-500 mt-1">Create and manage fragrance families for your products.</p>
           <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
             Drag cards to reorder
             {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
@@ -186,104 +185,100 @@ export default function CategoryManagement() {
           className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl flex items-center justify-center space-x-2 font-bold text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
         >
           <Plus size={18} />
-          <span>New Category</span>
+          <span>New Family</span>
         </button>
       </div>
 
-      {/* Toolbar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text" 
-            placeholder="Search categories..." 
+            placeholder="Search fragrance families..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
         </div>
         <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-          {filteredCategories.length} Categories Total
+          {filteredFamilies.length} Families Total
         </div>
       </div>
 
-      {/* Categories Grid */}
       {loading ? (
         <div className="h-64 flex flex-col items-center justify-center space-y-4">
           <Loader2 className="animate-spin text-indigo-600" size={40} />
-          <p className="text-slate-500 font-medium">Fetching categories...</p>
+          <p className="text-slate-500 font-medium">Fetching fragrance families...</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sortedCategories.map((cat) => (
+          {sortedFamilies.map((family) => (
             <div
-              key={cat._id}
+              key={family._id}
               draggable={searchTerm.trim().length === 0}
-              onDragStart={() => setDraggingId(cat._id)}
+              onDragStart={() => setDraggingId(family._id)}
               onDragOver={(e) => {
                 if (searchTerm.trim().length === 0) e.preventDefault();
               }}
-              onDrop={() => handleDrop(cat._id)}
+              onDrop={() => handleDrop(family._id)}
               className={clsx(
                 "bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden",
-                draggingId === cat._id && "bg-indigo-50/60"
+                draggingId === family._id && "bg-indigo-50/60"
               )}
             >
               <div className="flex items-start justify-between relative z-10">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold text-xl overflow-hidden">
-                    {cat.image_url ? (
-                      <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover" />
+                    {family.image_url ? (
+                      <img src={family.image_url} alt={family.name} className="w-full h-full object-cover" />
                     ) : (
-                      cat.icon || <Tag size={24} />
+                      family.icon || <Tag size={24} />
                     )}
                     </div>
                     <div>
                       <div className="flex items-center space-x-2">
-                         <h3 className="font-bold text-slate-900 text-lg">{cat.name}</h3>
-                         {cat.is_featured && (
+                         <h3 className="font-bold text-slate-900 text-lg">{family.name}</h3>
+                         {family.is_featured && (
                            <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-tighter">Featured</span>
                          )}
                       </div>
-                      <p className="text-sm text-slate-500 line-clamp-1">{cat.description || 'No description provided'}</p>
-                      <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">Order {cat.sort_order ?? 0}</p>
+                      <p className="text-sm text-slate-500 line-clamp-1">{family.description || 'No description provided'}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-1">Order {family.sort_order ?? 0}</p>
                     </div>
                 </div>
                 <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <GripVertical size={16} className={clsx("text-slate-300 cursor-grab", searchTerm.trim().length > 0 && "opacity-40 cursor-not-allowed")} />
                   <button 
-                    onClick={() => openEditModal(cat)}
+                    onClick={() => openEditModal(family)}
                     className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                   >
                     <Edit2 size={16} />
                   </button>
                   <button 
-                    onClick={() => handleDelete(cat._id)}
+                    onClick={() => handleDelete(family._id)}
                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
-              {/* Background Accent */}
               <div className="absolute top-0 right-0 p-1 bg-indigo-600/5 rounded-bl-3xl transform translate-x-1 -translate-y-1 group-hover:translate-x-0 group-hover:translate-y-0 transition-transform" />
             </div>
           ))}
-          {filteredCategories.length === 0 && (
+          {filteredFamilies.length === 0 && (
             <div className="col-span-full py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center space-y-4">
               <div className="p-4 bg-white rounded-full text-slate-300">
                 <Tag size={40} />
               </div>
               <div className="text-center">
-                <h3 className="font-bold text-slate-900 text-lg">No Categories Found</h3>
-                <p className="text-slate-500 text-sm">Get started by creating your first product category.</p>
+                <h3 className="font-bold text-slate-900 text-lg">No Fragrance Families Found</h3>
+                <p className="text-slate-500 text-sm">Get started by creating your first fragrance family.</p>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={closeModal} />
@@ -293,9 +288,9 @@ export default function CategoryManagement() {
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">
-                    {modalMode === 'add' ? 'Create Category' : 'Edit Category'}
+                    {modalMode === 'add' ? 'Create Fragrance Family' : 'Edit Fragrance Family'}
                   </h2>
-                  <p className="text-slate-500 text-sm mt-1">Enter the details for this fragrance category.</p>
+                  <p className="text-slate-500 text-sm mt-1">Enter the details for this fragrance family.</p>
                 </div>
                 <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
                   <X size={20} />
@@ -311,13 +306,13 @@ export default function CategoryManagement() {
                 )}
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Category Name</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Family Name</label>
                   <input 
                     type="text" 
                     required
-                    value={currentCategory.name}
-                    onChange={(e) => setCurrentCategory({...currentCategory, name: e.target.value})}
-                    placeholder="e.g. Niche, Designer, Middle Eastern"
+                    value={currentFamily.name}
+                    onChange={(e) => setCurrentFamily({...currentFamily, name: e.target.value})}
+                    placeholder="e.g. Woody, Floral, Oriental"
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
                   />
                 </div>
@@ -327,9 +322,9 @@ export default function CategoryManagement() {
                     <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Icon (Emoji)</label>
                     <input 
                       type="text" 
-                      value={currentCategory.icon}
-                      onChange={(e) => setCurrentCategory({...currentCategory, icon: e.target.value})}
-                      placeholder="e.g. 🎩"
+                      value={currentFamily.icon}
+                      onChange={(e) => setCurrentFamily({...currentFamily, icon: e.target.value})}
+                      placeholder="e.g. 🌲"
                       maxLength={2}
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
                     />
@@ -341,8 +336,8 @@ export default function CategoryManagement() {
                         <input 
                           type="checkbox" 
                           className="sr-only peer"
-                          checked={currentCategory.is_featured}
-                          onChange={(e) => setCurrentCategory({...currentCategory, is_featured: e.target.checked})}
+                          checked={currentFamily.is_featured}
+                          onChange={(e) => setCurrentFamily({...currentFamily, is_featured: e.target.checked})}
                         />
                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         <span className="ml-3 text-xs font-bold text-slate-500">Show in Curated Grid</span>
@@ -355,8 +350,8 @@ export default function CategoryManagement() {
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Image URL</label>
                   <input 
                     type="text" 
-                    value={currentCategory.image_url}
-                    onChange={(e) => setCurrentCategory({...currentCategory, image_url: e.target.value})}
+                    value={currentFamily.image_url}
+                    onChange={(e) => setCurrentFamily({...currentFamily, image_url: e.target.value})}
                     placeholder="https://images.unsplash.com/..."
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
                   />
@@ -367,8 +362,8 @@ export default function CategoryManagement() {
                   <input 
                     type="number" 
                     min={0}
-                    value={currentCategory.sort_order}
-                    onChange={(e) => setCurrentCategory({...currentCategory, sort_order: parseInt(e.target.value || '0', 10)})}
+                    value={currentFamily.sort_order}
+                    onChange={(e) => setCurrentFamily({...currentFamily, sort_order: parseInt(e.target.value || '0', 10)})}
                     placeholder="e.g. 1"
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
                   />
@@ -379,9 +374,9 @@ export default function CategoryManagement() {
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Description</label>
                   <textarea 
                     rows={2}
-                    value={currentCategory.description}
-                    onChange={(e) => setCurrentCategory({...currentCategory, description: e.target.value})}
-                    placeholder="Short description of this category type..."
+                    value={currentFamily.description}
+                    onChange={(e) => setCurrentFamily({...currentFamily, description: e.target.value})}
+                    placeholder="Short description of this fragrance family..."
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
                   />
                 </div>
@@ -400,7 +395,7 @@ export default function CategoryManagement() {
                     className="flex-[2] bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50 flex items-center justify-center space-x-2"
                   >
                     {modalLoading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                    <span>{modalMode === 'add' ? 'Create Category' : 'Save Changes'}</span>
+                    <span>{modalMode === 'add' ? 'Create Family' : 'Save Changes'}</span>
                   </button>
                 </div>
               </form>
