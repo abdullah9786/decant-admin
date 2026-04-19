@@ -11,7 +11,9 @@ import {
   Info,
   ChevronRight,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  FileJson,
+  X
 } from 'lucide-react';
 import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
@@ -256,6 +258,62 @@ export default function AddProductPage() {
     }
   };
 
+  const [jsonModalOpen, setJsonModalOpen] = useState(false);
+  const [jsonText, setJsonText] = useState('');
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  const handleJsonImport = () => {
+    setJsonError(null);
+    try {
+      const data = JSON.parse(jsonText);
+
+      const toCommaStr = (val: any): string => {
+        if (Array.isArray(val)) return val.join(', ');
+        if (typeof val === 'string') return val;
+        return '';
+      };
+
+      setFormData(prev => ({
+        ...prev,
+        name: data.name ?? prev.name,
+        brand: data.brand ?? prev.brand,
+        fragrance_family: data.fragrance_family ?? prev.fragrance_family,
+        description: data.description ?? prev.description,
+        image_url: data.image_url ?? prev.image_url,
+        images: Array.isArray(data.images) ? data.images : prev.images,
+        stock_ml: data.stock_ml ?? prev.stock_ml,
+        sort_order: data.sort_order ?? prev.sort_order,
+        is_featured: data.is_featured ?? prev.is_featured,
+        is_new_arrival: data.is_new_arrival ?? prev.is_new_arrival,
+        is_active: data.is_active ?? prev.is_active,
+        notes_top: toCommaStr(data.notes_top) || prev.notes_top,
+        notes_middle: toCommaStr(data.notes_middle) || prev.notes_middle,
+        notes_base: toCommaStr(data.notes_base) || prev.notes_base,
+        notes_top_desc: data.notes_top_desc ?? prev.notes_top_desc,
+        notes_middle_desc: data.notes_middle_desc ?? prev.notes_middle_desc,
+        notes_base_desc: data.notes_base_desc ?? prev.notes_base_desc,
+        bottle_ids: Array.isArray(data.bottle_ids) ? data.bottle_ids : prev.bottle_ids,
+        category_ids: Array.isArray(data.category_ids) ? data.category_ids : prev.category_ids,
+      }));
+
+      if (Array.isArray(data.variants) && data.variants.length > 0) {
+        setVariants(
+          data.variants.map((v: any) => ({
+            size_ml: Number(v.size_ml) || 0,
+            price: Number(v.price) || 0,
+            is_pack: !!v.is_pack,
+            stock: Number(v.stock) || 0,
+          }))
+        );
+      }
+
+      setJsonModalOpen(false);
+      setJsonText('');
+    } catch {
+      setJsonError('Invalid JSON. Please check the format and try again.');
+    }
+  };
+
   if (success) {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in zoom-in duration-500">
@@ -288,8 +346,57 @@ export default function AddProductPage() {
           </div>
         </div>
         
-        <div />
+        <button
+          type="button"
+          onClick={() => setJsonModalOpen(true)}
+          className="flex items-center space-x-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors"
+        >
+          <FileJson size={16} />
+          <span>Import JSON</span>
+        </button>
       </div>
+
+      {jsonModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <FileJson size={18} className="text-indigo-600" />
+                <h3 className="font-bold text-slate-900">Import from JSON</h3>
+              </div>
+              <button type="button" onClick={() => { setJsonModalOpen(false); setJsonError(null); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <p className="text-xs text-slate-500">Paste your product JSON below. All matching fields will auto-fill the form.</p>
+              <textarea
+                value={jsonText}
+                onChange={(e) => { setJsonText(e.target.value); setJsonError(null); }}
+                placeholder='{ "name": "Bleu de Chanel", "brand": "Chanel", ... }'
+                rows={14}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none placeholder:text-slate-300"
+              />
+              {jsonError && (
+                <p className="text-xs text-red-600 font-medium">{jsonError}</p>
+              )}
+            </div>
+            <div className="flex items-center justify-end space-x-3 px-6 py-4 border-t border-slate-100">
+              <button type="button" onClick={() => { setJsonModalOpen(false); setJsonError(null); }} className="px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleJsonImport}
+                disabled={!jsonText.trim()}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Import & Fill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <div className="xl:col-span-7 space-y-6">
