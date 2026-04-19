@@ -255,7 +255,7 @@ export default function ProductList() {
                             {deletingId === productId ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                           </button>
                           <a 
-                            href={`http://localhost:3000/products/${productId}`} 
+                            href={`http://localhost:3000/products/${product.slug || productId}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
