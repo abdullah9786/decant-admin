@@ -154,6 +154,14 @@ export const giftBoxApi = {
     delete: (id: string) => api.delete(`/gift-boxes/${id}`),
 };
 
+export const offerApi = {
+    getAll: () => api.get('/offers'),
+    getOne: (id: string) => api.get(`/offers/${id}`),
+    create: (data: any) => api.post('/offers', data),
+    update: (id: string, data: any) => api.put(`/offers/${id}`, data),
+    delete: (id: string) => api.delete(`/offers/${id}`),
+};
+
 export const influencerAdminApi = {
     getAll: () => api.get('/influencers/admin/all'),
     create: (data: any) => api.post('/influencers/create', data),

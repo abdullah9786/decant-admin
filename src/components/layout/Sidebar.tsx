@@ -24,6 +24,7 @@ import {
   Ticket,
   AlertTriangle,
   Gift,
+  Percent,
 } from 'lucide-react';
 import { PerfumeBottle } from '@/components/icons/PerfumeBottle';
 import { clsx, type ClassValue } from 'clsx';
@@ -50,6 +51,7 @@ const navItems = [
   { name: 'Commissions', href: '/commissions', icon: DollarSign },
   { name: 'Payouts', href: '/payouts', icon: Wallet },
   { name: 'Coupons', href: '/coupons', icon: Ticket },
+  { name: 'Offers', href: '/offers', icon: Percent },
 ];
 
 const Sidebar = () => {

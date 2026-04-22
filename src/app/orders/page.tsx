@@ -24,6 +24,12 @@ import {
 import { orderApi } from '@/lib/api';
 import { clsx } from 'clsx';
 
+function safeDate(v: string | undefined | null): Date {
+  if (!v) return new Date();
+  if (!v.endsWith('Z') && !v.includes('+')) return new Date(v + 'Z');
+  return new Date(v);
+}
+
 export default function OrderManagement() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -225,7 +231,7 @@ export default function OrderManagement() {
                       {order.items?.[0]?.name}
                       {order.items?.length > 1 ? ` + ${order.items.length - 1} more` : ''}
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{new Date(order.created_at).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-sm text-slate-500">{safeDate(order.created_at).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-900">₹{order.total_amount}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
@@ -287,7 +293,7 @@ export default function OrderManagement() {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-slate-900 break-all">Order #{selectedOrder.id || selectedOrder._id || ''}</h2>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Placed on {new Date(selectedOrder.created_at).toLocaleString()}</p>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Placed on {safeDate(selectedOrder.created_at).toLocaleString()}</p>
                   </div>
                </div>
                <button onClick={closeViewModal} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
@@ -380,6 +386,29 @@ export default function OrderManagement() {
                                       </tr>
                                    ))}
                                 </tbody>
+                                {selectedOrder.free_decants?.length > 0 && (
+                                  <tbody className="border-t-2 border-amber-200">
+                                    {selectedOrder.free_decants.map((fd: any, i: number) => (
+                                      <tr key={`fd-${i}`} className="bg-amber-50/50">
+                                        <td className="px-6 py-3">
+                                          <div className="flex items-center space-x-2">
+                                            <span className="bg-amber-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider">FREE</span>
+                                            <div>
+                                              <p className="font-bold text-slate-900 text-sm">{fd.name}</p>
+                                              <p className="text-xs text-slate-400 font-medium">{fd.size_ml}ml Decant</p>
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-center font-bold text-slate-600 text-sm">x1</td>
+                                        <td className="px-6 py-3 text-center">
+                                          <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Free Decant</span>
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-bold text-amber-600 text-sm">₹0</td>
+                                        <td className="px-6 py-3"></td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                )}
                                 <tfoot className="bg-slate-50/50">
                                    <tr>
                                       <td colSpan={3} className="px-6 py-6 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Total Amount</td>
