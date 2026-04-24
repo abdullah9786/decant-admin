@@ -3,10 +3,44 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, Search, Trash2, Edit2, Loader2, Percent, AlertCircle,
-  CheckCircle2, X,
+  CheckCircle2, X, Calendar, Clock,
 } from 'lucide-react';
 import { offerApi, productApi } from '@/lib/api';
 import { clsx } from 'clsx';
+
+function toLocalInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalInput(v: string): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function plusHoursIso(hours: number): string {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+interface OfferState {
+  label: string;
+  cls: string;
+}
+
+function getOfferState(o: any): OfferState {
+  if (!o.is_active) return { label: 'Inactive', cls: 'bg-slate-100 text-slate-500 border border-slate-200' };
+  const now = Date.now();
+  const start = o.starts_at ? new Date(o.starts_at).getTime() : null;
+  const end = o.ends_at ? new Date(o.ends_at).getTime() : null;
+  if (start && start > now) return { label: 'Scheduled', cls: 'bg-blue-50 text-blue-700 border border-blue-200' };
+  if (end && end <= now) return { label: 'Expired', cls: 'bg-red-50 text-red-700 border border-red-200' };
+  if (!end) return { label: 'Live · No end date', cls: 'bg-amber-50 text-amber-700 border border-amber-200' };
+  return { label: 'Live', cls: 'bg-green-50 text-green-700 border border-green-200' };
+}
 
 const OFFER_TYPES = [
   { value: 'free_decant', label: 'Free Decant' },
@@ -36,6 +70,8 @@ interface OfferForm {
   name: string;
   type: string;
   is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
   config: typeof defaultConfig;
   display: typeof defaultDisplay;
 }
@@ -44,6 +80,8 @@ const emptyForm = (): OfferForm => ({
   name: '',
   type: 'free_decant',
   is_active: true,
+  starts_at: null,
+  ends_at: null,
   config: { ...defaultConfig, eligible_product_ids: [] },
   display: { ...defaultDisplay },
 });
@@ -99,6 +137,8 @@ export default function OfferManagement() {
       name: offer.name || '',
       type: offer.type || 'free_decant',
       is_active: offer.is_active !== false,
+      starts_at: offer.starts_at || null,
+      ends_at: offer.ends_at || null,
       config: {
         min_qualifying_ml: cfg.min_qualifying_ml ?? 10,
         free_size_ml: cfg.free_size_ml ?? 2,
@@ -163,6 +203,15 @@ export default function OfferManagement() {
     e.preventDefault();
     setModalLoading(true);
     setModalError(null);
+    if (form.starts_at && form.ends_at) {
+      const s = new Date(form.starts_at).getTime();
+      const en = new Date(form.ends_at).getTime();
+      if (en <= s) {
+        setModalError('End date must be after start date.');
+        setModalLoading(false);
+        return;
+      }
+    }
     try {
       if (modalMode === 'add') {
         await offerApi.create(form);
@@ -235,6 +284,19 @@ export default function OfferManagement() {
         </div>
       </div>
 
+      {(() => {
+        const needsAttention = offers.filter(o => o.is_active && !o.ends_at).length;
+        if (needsAttention === 0) return null;
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3 text-sm">
+            <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
+            <p className="text-amber-800">
+              <span className="font-bold">{needsAttention} offer{needsAttention > 1 ? 's' : ''}</span> running with no end date — manual stop required.
+            </p>
+          </div>
+        );
+      })()}
+
       {loading ? (
         <div className="h-64 flex flex-col items-center justify-center space-y-4">
           <Loader2 className="animate-spin text-indigo-600" size={40} />
@@ -245,6 +307,7 @@ export default function OfferManagement() {
           {filteredOffers.map(offer => {
             const cfg = offer.config || {};
             const eligibleCount = (cfg.eligible_product_ids || []).length;
+            const state = getOfferState(offer);
             return (
               <div
                 key={offer._id}
@@ -253,20 +316,19 @@ export default function OfferManagement() {
                   !offer.is_active && 'opacity-60'
                 )}
               >
-                <div className="h-24 w-full bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center">
+                <div className="h-24 w-full bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center relative">
                   <Percent size={36} className="text-amber-400" />
+                  <span className={clsx(
+                    'absolute top-3 right-3 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full',
+                    state.cls
+                  )}>
+                    {state.label}
+                  </span>
                 </div>
                 <div className="p-5">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-bold text-slate-900 text-lg truncate">{offer.name}</h3>
-                        {!offer.is_active && (
-                          <span className="bg-slate-100 text-slate-500 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-tighter shrink-0">
-                            Inactive
-                          </span>
-                        )}
-                      </div>
+                      <h3 className="font-bold text-slate-900 text-lg truncate">{offer.name}</h3>
                       <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">
                         {offer.type?.replace('_', ' ')}
                       </p>
@@ -281,6 +343,14 @@ export default function OfferManagement() {
                       <p className="text-[10px] uppercase tracking-widest text-indigo-500 font-bold mt-1">
                         {eligibleCount} Eligible Products
                       </p>
+                      {(offer.starts_at || offer.ends_at) && (
+                        <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                          <Calendar size={10} />
+                          {offer.starts_at ? new Date(offer.starts_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Now'}
+                          <span className="text-slate-300 mx-0.5">→</span>
+                          {offer.ends_at ? new Date(offer.ends_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Manual stop'}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
                       <button
@@ -386,6 +456,68 @@ export default function OfferManagement() {
                       </label>
                     </div>
                   </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-slate-900 font-bold flex items-center gap-2">
+                      <Clock size={16} className="text-indigo-600" /> Schedule
+                    </p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest">Times shown in your local timezone</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Start Date & Time</label>
+                        <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={form.starts_at === null}
+                            onChange={e => setForm({ ...form, starts_at: e.target.checked ? null : plusHoursIso(0) })}
+                            className="w-3.5 h-3.5 accent-indigo-600"
+                          />
+                          Start now
+                        </label>
+                      </div>
+                      <input
+                        type="datetime-local"
+                        disabled={form.starts_at === null}
+                        value={toLocalInput(form.starts_at)}
+                        onChange={e => setForm({ ...form, starts_at: fromLocalInput(e.target.value) })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">End Date & Time</label>
+                        <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={form.ends_at === null}
+                            onChange={e => setForm({ ...form, ends_at: e.target.checked ? null : plusHoursIso(24 * 7) })}
+                            className="w-3.5 h-3.5 accent-indigo-600"
+                          />
+                          No end date
+                        </label>
+                      </div>
+                      <input
+                        type="datetime-local"
+                        disabled={form.ends_at === null}
+                        value={toLocalInput(form.ends_at)}
+                        onChange={e => setForm({ ...form, ends_at: fromLocalInput(e.target.value) })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  {form.ends_at === null && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                      <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
+                      No end date set — this offer will run until you stop it manually.
+                    </p>
+                  )}
                 </div>
 
                 {form.type === 'free_decant' && (

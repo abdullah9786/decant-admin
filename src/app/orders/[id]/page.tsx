@@ -395,6 +395,23 @@ export default function OrderDetailPage() {
                   ))}
                 </>
               )}
+
+              {order.free_decants_dropped_reason && (
+                <div className="px-6 py-4 bg-amber-50 border-y border-amber-200 flex items-start gap-3">
+                  <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-900">
+                    <p className="font-black uppercase tracking-widest text-[10px] mb-1">
+                      Free Decant Removed
+                    </p>
+                    <p className="text-amber-800">
+                      Customer's free decant was dropped during checkout: <span className="font-semibold">{order.free_decants_dropped_reason}</span>
+                    </p>
+                    <p className="text-amber-700 mt-1 italic">
+                      Consider gifting a complimentary decant out-of-band if you want to honor the original intent.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Summary */}
