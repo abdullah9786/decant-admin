@@ -95,6 +95,8 @@ export const productApi = {
     create: (data: any) => api.post('/products', data),
     update: (id: string, data: any) => api.put(`/products/${id}`, data),
     delete: (id: string) => api.delete(`/products/${id}`),
+    bulkChips: (data: { product_ids: string[]; add?: string[]; remove?: string[] }) =>
+        api.post('/products/bulk-chips', data),
 };
 
 export const orderApi = {
@@ -160,6 +162,15 @@ export const offerApi = {
     create: (data: any) => api.post('/offers', data),
     update: (id: string, data: any) => api.put(`/offers/${id}`, data),
     delete: (id: string) => api.delete(`/offers/${id}`),
+};
+
+export const chipApi = {
+    getAll: () => api.get('/chips'),
+    getActive: () => api.get('/chips/active'),
+    getOne: (id: string) => api.get(`/chips/${id}`),
+    create: (data: any) => api.post('/chips', data),
+    update: (id: string, data: any) => api.put(`/chips/${id}`, data),
+    delete: (id: string) => api.delete(`/chips/${id}`),
 };
 
 export const influencerAdminApi = {

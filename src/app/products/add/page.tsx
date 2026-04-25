@@ -15,8 +15,9 @@ import {
   FileJson,
   X
 } from 'lucide-react';
-import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi } from '@/lib/api';
+import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi, chipApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
+import ChipPickerSection from '@/components/shared/ChipPickerSection';
 
 export default function AddProductPage() {
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function AddProductPage() {
     notes_base_desc: '',
     bottle_ids: [] as string[],
     category_ids: [] as string[],
+    chip_ids: [] as string[],
   });
 
   const [fragranceFamilies, setFragranceFamilies] = useState<any[]>([]);
@@ -52,6 +54,7 @@ export default function AddProductPage() {
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [allBottles, setAllBottles] = useState<any[]>([]);
+  const [allChips, setAllChips] = useState<any[]>([]);
   const [fetchingBrands, setFetchingBrands] = useState(true);
 
   React.useEffect(() => {
@@ -95,6 +98,9 @@ export default function AddProductPage() {
     categoryApi.getAll({ include_inactive: true }).then(res => {
       setAllCategories(res.data || []);
     }).catch(() => {});
+    chipApi.getAll().then(res => {
+      setAllChips(res.data || []);
+    }).catch(() => {});
   }, []);
 
   React.useEffect(() => {
@@ -125,6 +131,15 @@ export default function AddProductPage() {
       category_ids: prev.category_ids.includes(id)
         ? prev.category_ids.filter(c => c !== id)
         : [...prev.category_ids, id],
+    }));
+  };
+
+  const toggleChip = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      chip_ids: prev.chip_ids.includes(id)
+        ? prev.chip_ids.filter(c => c !== id)
+        : [...prev.chip_ids, id],
     }));
   };
 
@@ -199,6 +214,7 @@ export default function AddProductPage() {
         ...formData,
         stock_ml: parseInt(String(formData.stock_ml || 0)),
         sort_order: parseInt(String(formData.sort_order || 0)),
+        chip_ids: formData.chip_ids,
         notes_top: splitNotes(formData.notes_top),
         notes_middle: splitNotes(formData.notes_middle),
         notes_base: splitNotes(formData.notes_base),
@@ -717,6 +733,12 @@ export default function AddProductPage() {
             </div>
           </section>
           )}
+
+          <ChipPickerSection
+            allChips={allChips}
+            selectedIds={formData.chip_ids}
+            onToggle={toggleChip}
+          />
         </div>
 
         <div className="xl:col-span-5 space-y-6">

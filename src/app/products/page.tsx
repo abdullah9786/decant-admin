@@ -17,9 +17,12 @@ import {
   Star,
   Sparkles,
   X,
+  BadgeCheck,
+  BadgeMinus,
 } from 'lucide-react';
-import { productApi } from '@/lib/api';
+import { productApi, chipApi } from '@/lib/api';
 import { clsx } from 'clsx';
+import { chipColorCls } from '@/components/shared/ChipPickerSection';
 
 export default function ProductList() {
   const [products, setProducts] = useState<any[]>([]);
@@ -41,6 +44,10 @@ export default function ProductList() {
   } | null>(null);
   const [bulkResult, setBulkResult] = useState<{ ok: number; fail: number; action: string } | null>(null);
 
+  const [allChips, setAllChips] = useState<any[]>([]);
+  const [chipPickerMode, setChipPickerMode] = useState<'add' | 'remove' | null>(null);
+  const [pickedChipIds, setPickedChipIds] = useState<Set<string>>(new Set());
+
   const fetchProducts = async () => {
     setLoading(true);
     try {
@@ -55,6 +62,7 @@ export default function ProductList() {
 
   useEffect(() => {
     fetchProducts();
+    chipApi.getAll().then(res => setAllChips(res.data || [])).catch(() => {});
   }, []);
 
   const handleDelete = async (id: string) => {
@@ -195,6 +203,61 @@ export default function ProductList() {
     setSelectedIds(new Set());
     setBulkResult({ ok, fail, action: 'delete' });
     setBulkLoading(null);
+    setTimeout(() => setBulkResult(null), 3500);
+  };
+
+  const openChipPicker = (mode: 'add' | 'remove') => {
+    setPickedChipIds(new Set());
+    setChipPickerMode(mode);
+  };
+
+  const closeChipPicker = () => {
+    setChipPickerMode(null);
+    setPickedChipIds(new Set());
+  };
+
+  const togglePickedChip = (id: string) => {
+    setPickedChipIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const runBulkChips = async () => {
+    const productIds = Array.from(selectedIds);
+    const chipIds = Array.from(pickedChipIds);
+    if (productIds.length === 0 || chipIds.length === 0 || !chipPickerMode) return;
+    const actionKey = chipPickerMode === 'add' ? 'chips-add' : 'chips-remove';
+    setBulkLoading(actionKey);
+
+    setProducts(prev => prev.map(p => {
+      if (!selectedIds.has(getId(p))) return p;
+      const current: string[] = p.chip_ids || [];
+      let next: string[];
+      if (chipPickerMode === 'add') {
+        next = Array.from(new Set([...current, ...chipIds]));
+      } else {
+        next = current.filter(id => !chipIds.includes(id));
+      }
+      return { ...p, chip_ids: next };
+    }));
+
+    try {
+      await productApi.bulkChips({
+        product_ids: productIds,
+        add: chipPickerMode === 'add' ? chipIds : [],
+        remove: chipPickerMode === 'remove' ? chipIds : [],
+      });
+      setBulkResult({ ok: productIds.length, fail: 0, action: actionKey });
+    } catch (err) {
+      console.error('Bulk chips failed', err);
+      setBulkResult({ ok: 0, fail: productIds.length, action: actionKey });
+      await fetchProducts();
+    }
+    setBulkLoading(null);
+    closeChipPicker();
     setTimeout(() => setBulkResult(null), 3500);
   };
 
@@ -369,6 +432,23 @@ export default function ProductList() {
             )}
           />
 
+          <div className="h-6 w-px bg-indigo-400/50 mx-1" />
+
+          <BulkButton
+            icon={<BadgeCheck size={14} />}
+            label="Add Chips"
+            loading={bulkLoading === 'chips-add'}
+            disabled={!!bulkLoading || allChips.length === 0}
+            onClick={() => openChipPicker('add')}
+          />
+          <BulkButton
+            icon={<BadgeMinus size={14} />}
+            label="Remove Chips"
+            loading={bulkLoading === 'chips-remove'}
+            disabled={!!bulkLoading || allChips.length === 0}
+            onClick={() => openChipPicker('remove')}
+          />
+
           <div className="ml-auto" />
 
           <BulkButton
@@ -505,6 +585,23 @@ export default function ProductList() {
                                   <Sparkles size={10} /> New
                                 </span>
                               )}
+                              {(product.chips || []).slice(0, 4).map((chip: any) => (
+                                <span
+                                  key={chip._id}
+                                  className={clsx(
+                                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border',
+                                    chipColorCls(chip.color),
+                                  )}
+                                >
+                                  {chip.icon && <span>{chip.icon}</span>}
+                                  {chip.label}
+                                </span>
+                              ))}
+                              {(product.chips || []).length > 4 && (
+                                <span className="text-[9px] font-bold text-slate-400">
+                                  +{product.chips.length - 4}
+                                </span>
+                              )}
                             </div>
                             <p className="text-xs text-slate-400 mt-1 uppercase tracking-tighter">
                               ID: {(productId || '').substring(0, 8)}
@@ -565,6 +662,77 @@ export default function ProductList() {
           </div>
         )}
       </div>
+
+      {/* Bulk chip picker modal */}
+      {chipPickerMode && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="h-2 bg-indigo-600 w-full" />
+            <div className="p-6 space-y-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {chipPickerMode === 'add' ? 'Add chips to selection' : 'Remove chips from selection'}
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {chipPickerMode === 'add'
+                      ? `Pick chips to add to ${noun}.`
+                      : `Pick chips to remove from ${noun}.`}
+                  </p>
+                </div>
+                <button onClick={closeChipPicker} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2 max-h-[50vh] overflow-y-auto p-1">
+                {allChips.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic">
+                    No chips available. Create chips in the Chips page first.
+                  </p>
+                ) : allChips.map((chip: any) => {
+                  const cid = chip._id || chip.id;
+                  const picked = pickedChipIds.has(cid);
+                  return (
+                    <button
+                      key={cid}
+                      type="button"
+                      onClick={() => togglePickedChip(cid)}
+                      className={clsx(
+                        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all',
+                        chipColorCls(chip.color),
+                        picked ? 'ring-2 ring-offset-2 ring-indigo-500' : 'opacity-70 hover:opacity-100',
+                      )}
+                    >
+                      {chip.icon && <span>{chip.icon}</span>}
+                      {chip.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-[10px] text-slate-400">{pickedChipIds.size} chip{pickedChipIds.size === 1 ? '' : 's'} picked</p>
+            </div>
+
+            <div className="flex border-t border-slate-100">
+              <button
+                onClick={closeChipPicker}
+                disabled={!!bulkLoading}
+                className="flex-1 px-4 py-3.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runBulkChips}
+                disabled={!!bulkLoading || pickedChipIds.size === 0}
+                className="flex-1 px-4 py-3.5 text-sm font-bold text-indigo-600 hover:bg-indigo-50 transition-colors border-l border-slate-100 disabled:opacity-50 disabled:hover:bg-transparent"
+              >
+                {bulkLoading ? 'Working…' : (chipPickerMode === 'add' ? 'Add chips' : 'Remove chips')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bulk confirm modal */}
       {bulkConfirm && (
