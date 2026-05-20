@@ -444,18 +444,31 @@ export default function OrderDetailPage() {
           {/* Payment Info */}
           {order.payment_details && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2 flex-wrap">
                 <Receipt size={16} className="text-indigo-600" />
                 <h3 className="text-sm font-bold text-slate-900">Payment Details</h3>
+                {order.payment_method === 'cod' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-800 border border-amber-200">
+                    Cash on Delivery
+                  </span>
+                )}
                 <span className={clsx(
                   "ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest",
                   order.payment_status === 'paid' ? "bg-green-50 text-green-700" :
                   order.payment_status === 'refunded' ? "bg-orange-50 text-orange-700" :
+                  order.payment_status === 'cod_pending' ? "bg-amber-50 text-amber-700" :
                   "bg-amber-50 text-amber-700"
                 )}>
-                  {order.payment_status || 'pending'}
+                  {order.payment_status === 'cod_pending' ? 'Collect on Delivery' : (order.payment_status || 'pending')}
                 </span>
               </div>
+              {order.payment_method === 'cod' && order.payment_status !== 'paid' && (
+                <div className="px-6 py-3 bg-amber-50/60 border-b border-amber-100 text-xs text-amber-800">
+                  Courier must collect <strong>₹{(order.total_amount || 0).toLocaleString('en-IN')}</strong> at delivery
+                  {order.cod_fee ? <span className="text-amber-700"> (includes ₹{order.cod_fee} COD handling fee)</span> : null}
+                  . Marking this order as delivered will record cash as received.
+                </div>
+              )}
               <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {order.payment_details.razorpay_payment_id && (
                   <div>
@@ -473,6 +486,18 @@ export default function OrderDetailPage() {
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Paid At</p>
                     <p className="text-xs font-bold text-slate-700">{safeDate(order.payment_details.paid_at).toLocaleString()}</p>
+                  </div>
+                )}
+                {order.payment_details.collected_at && (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Cash Collected At</p>
+                    <p className="text-xs font-bold text-slate-700">{safeDate(order.payment_details.collected_at).toLocaleString()}</p>
+                  </div>
+                )}
+                {order.payment_method === 'cod' && order.cod_fee != null && (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">COD Handling Fee</p>
+                    <p className="text-xs font-bold text-slate-700">₹{order.cod_fee}</p>
                   </div>
                 )}
                 {order.payment_details.source && (
