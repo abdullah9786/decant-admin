@@ -8,9 +8,21 @@ import {
 import { offerApi, productApi } from '@/lib/api';
 import { clsx } from 'clsx';
 
+// Mongo via Motor returns naive datetimes (no tz suffix). When that bare
+// string reaches `new Date(...)` the browser treats it as *local* time,
+// which clobbers IST-saved offers by their UTC offset on the next read.
+// Force-stamping a `Z` on any ISO string that has no offset keeps the
+// round-trip lossless: backend always stores in UTC, frontend always
+// displays in the admin's local zone (IST in our case).
+function normalizeIso(iso: string): string {
+  // Already has an explicit offset or Z — trust it.
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso)) return iso;
+  return `${iso}Z`;
+}
+
 function toLocalInput(iso: string | null | undefined): string {
   if (!iso) return '';
-  const d = new Date(iso);
+  const d = new Date(normalizeIso(iso));
   if (isNaN(d.getTime())) return '';
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -34,8 +46,8 @@ interface OfferState {
 function getOfferState(o: any): OfferState {
   if (!o.is_active) return { label: 'Inactive', cls: 'bg-slate-100 text-slate-500 border border-slate-200' };
   const now = Date.now();
-  const start = o.starts_at ? new Date(o.starts_at).getTime() : null;
-  const end = o.ends_at ? new Date(o.ends_at).getTime() : null;
+  const start = o.starts_at ? new Date(normalizeIso(o.starts_at)).getTime() : null;
+  const end = o.ends_at ? new Date(normalizeIso(o.ends_at)).getTime() : null;
   if (start && start > now) return { label: 'Scheduled', cls: 'bg-blue-50 text-blue-700 border border-blue-200' };
   if (end && end <= now) return { label: 'Expired', cls: 'bg-red-50 text-red-700 border border-red-200' };
   if (!end) return { label: 'Live · No end date', cls: 'bg-amber-50 text-amber-700 border border-amber-200' };
@@ -44,6 +56,7 @@ function getOfferState(o: any): OfferState {
 
 const OFFER_TYPES = [
   { value: 'free_decant', label: 'Free Decant' },
+  { value: 'daily_deal', label: 'Daily Deal' },
 ];
 
 const QUALIFYING_TYPES = [
@@ -52,18 +65,41 @@ const QUALIFYING_TYPES = [
   { value: 'both', label: 'Both (Decant + Sealed)' },
 ];
 
+const APPLY_TO_TYPES = [
+  { value: 'all', label: 'All Variants' },
+  { value: 'decant', label: 'Decants Only' },
+  { value: 'pack', label: 'Sealed Pack Only' },
+];
+
+// `config` carries the union of all offer-type-specific fields. A given form
+// only mutates the slice it cares about; the other fields ride along untouched
+// until the offer is saved.
 const defaultConfig = {
+  // free_decant
   min_qualifying_ml: 10,
   free_size_ml: 2,
   max_free_per_order: null as number | null,
   qualifying_type: 'decant',
   eligible_product_ids: [] as string[],
+  // daily_deal
+  product_ids: [] as string[],
+  discount_percent: 50,
+  apply_to: 'all',
 };
 
 const defaultDisplay = {
+  // free_decant
   title: 'Free 2ml Decant',
   subtitle: 'Pick a free 2ml decant with every 10ml+ purchase',
   banner_text: 'You have unclaimed free decants!',
+  // daily_deal (Decume Daily marketing surfaces)
+  headline: 'Decume Daily',
+  subheadline: '',
+  marquee_text: '',
+  cta_label: 'Shop Today\'s Deal',
+  cta_href: '/deals/today',
+  accent_color: '#dc2626',
+  hero_image: '',
 };
 
 interface OfferForm {
@@ -82,9 +118,16 @@ const emptyForm = (): OfferForm => ({
   is_active: true,
   starts_at: null,
   ends_at: null,
-  config: { ...defaultConfig, eligible_product_ids: [] },
+  config: { ...defaultConfig, eligible_product_ids: [], product_ids: [] },
   display: { ...defaultDisplay },
 });
+
+// Whether the picker on the modal should target `product_ids` (daily_deal) or
+// `eligible_product_ids` (free_decant). Centralised so the toggle/select-all
+// helpers stay type-agnostic.
+function productIdsField(type: string): 'product_ids' | 'eligible_product_ids' {
+  return type === 'daily_deal' ? 'product_ids' : 'eligible_product_ids';
+}
 
 export default function OfferManagement() {
   const [offers, setOffers] = useState<any[]>([]);
@@ -140,16 +183,30 @@ export default function OfferManagement() {
       starts_at: offer.starts_at || null,
       ends_at: offer.ends_at || null,
       config: {
+        // free_decant slice
         min_qualifying_ml: cfg.min_qualifying_ml ?? 10,
         free_size_ml: cfg.free_size_ml ?? 2,
         max_free_per_order: cfg.max_free_per_order ?? null,
         qualifying_type: cfg.qualifying_type ?? 'decant',
         eligible_product_ids: cfg.eligible_product_ids || [],
+        // daily_deal slice
+        product_ids: cfg.product_ids || [],
+        discount_percent: cfg.discount_percent ?? 50,
+        apply_to: cfg.apply_to ?? 'all',
       },
       display: {
+        // free_decant slice
         title: dsp.title || '',
         subtitle: dsp.subtitle || '',
         banner_text: dsp.banner_text || '',
+        // daily_deal slice
+        headline: dsp.headline || 'Decume Daily',
+        subheadline: dsp.subheadline || '',
+        marquee_text: dsp.marquee_text || '',
+        cta_label: dsp.cta_label || 'Shop Today\'s Deal',
+        cta_href: dsp.cta_href || '/deals/today',
+        accent_color: dsp.accent_color || '#dc2626',
+        hero_image: dsp.hero_image || '',
       },
     });
     setProductSearch('');
@@ -171,33 +228,44 @@ export default function OfferManagement() {
 
   const toggleProduct = (pid: string) => {
     setForm(prev => {
-      const ids = prev.config.eligible_product_ids;
+      const field = productIdsField(prev.type);
+      const ids = (prev.config as any)[field] as string[];
       return {
         ...prev,
         config: {
           ...prev.config,
-          eligible_product_ids: ids.includes(pid) ? ids.filter(id => id !== pid) : [...ids, pid],
+          [field]: ids.includes(pid) ? ids.filter(id => id !== pid) : [...ids, pid],
         },
       };
     });
   };
 
   const selectAllProducts = () => {
-    setForm(prev => ({
-      ...prev,
-      config: {
-        ...prev.config,
-        eligible_product_ids: filteredModalProducts.map(p => getId(p)),
-      },
-    }));
+    setForm(prev => {
+      const field = productIdsField(prev.type);
+      return {
+        ...prev,
+        config: {
+          ...prev.config,
+          [field]: filteredModalProducts.map(p => getId(p)),
+        },
+      };
+    });
   };
 
   const removeAllProducts = () => {
-    setForm(prev => ({
-      ...prev,
-      config: { ...prev.config, eligible_product_ids: [] },
-    }));
+    setForm(prev => {
+      const field = productIdsField(prev.type);
+      return {
+        ...prev,
+        config: { ...prev.config, [field]: [] },
+      };
+    });
   };
+
+  // Currently-selected ids for the visible picker; switches between
+  // eligible_product_ids and product_ids based on form.type.
+  const selectedProductIds: string[] = (form.config as any)[productIdsField(form.type)] || [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,7 +374,9 @@ export default function OfferManagement() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredOffers.map(offer => {
             const cfg = offer.config || {};
-            const eligibleCount = (cfg.eligible_product_ids || []).length;
+            const eligibleCount = offer.type === 'daily_deal'
+              ? (cfg.product_ids || []).length
+              : (cfg.eligible_product_ids || []).length;
             const state = getOfferState(offer);
             return (
               <div
@@ -332,23 +402,32 @@ export default function OfferManagement() {
                       <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">
                         {offer.type?.replace('_', ' ')}
                       </p>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[10px] uppercase tracking-widest text-slate-400">
-                        <span>Min {cfg.min_qualifying_ml || 10}ml</span>
-                        <span>Free {cfg.free_size_ml || 2}ml</span>
-                        <span>{cfg.max_free_per_order ? `Max ${cfg.max_free_per_order}/order` : 'Unlimited'}</span>
-                        <span className="text-indigo-400">
-                          {cfg.qualifying_type === 'sealed' ? 'Sealed only' : cfg.qualifying_type === 'both' ? 'Decant + Sealed' : 'Decant only'}
-                        </span>
-                      </div>
+                      {offer.type === 'daily_deal' ? (
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[10px] uppercase tracking-widest text-slate-400">
+                          <span className="text-rose-500 font-bold">{cfg.discount_percent || 0}% OFF</span>
+                          <span>
+                            {cfg.apply_to === 'decant' ? 'Decant variants' : cfg.apply_to === 'pack' ? 'Sealed packs' : 'All variants'}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[10px] uppercase tracking-widest text-slate-400">
+                          <span>Min {cfg.min_qualifying_ml || 10}ml</span>
+                          <span>Free {cfg.free_size_ml || 2}ml</span>
+                          <span>{cfg.max_free_per_order ? `Max ${cfg.max_free_per_order}/order` : 'Unlimited'}</span>
+                          <span className="text-indigo-400">
+                            {cfg.qualifying_type === 'sealed' ? 'Sealed only' : cfg.qualifying_type === 'both' ? 'Decant + Sealed' : 'Decant only'}
+                          </span>
+                        </div>
+                      )}
                       <p className="text-[10px] uppercase tracking-widest text-indigo-500 font-bold mt-1">
-                        {eligibleCount} Eligible Products
+                        {eligibleCount} {offer.type === 'daily_deal' ? 'Deal' : 'Eligible'} Products
                       </p>
                       {(offer.starts_at || offer.ends_at) && (
                         <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
                           <Calendar size={10} />
-                          {offer.starts_at ? new Date(offer.starts_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Now'}
+                          {offer.starts_at ? new Date(normalizeIso(offer.starts_at)).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Now'}
                           <span className="text-slate-300 mx-0.5">→</span>
-                          {offer.ends_at ? new Date(offer.ends_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Manual stop'}
+                          {offer.ends_at ? new Date(normalizeIso(offer.ends_at)).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Manual stop'}
                         </p>
                       )}
                     </div>
@@ -520,6 +599,124 @@ export default function OfferManagement() {
                   )}
                 </div>
 
+                {form.type === 'daily_deal' && (
+                  <>
+                    <div className="border-t border-slate-100 pt-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-slate-900 font-bold">Daily Deal Configuration</p>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-widest">Set window via Schedule above</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Discount %</label>
+                          <input
+                            type="number" min={1} max={90}
+                            value={form.config.discount_percent}
+                            onChange={e => setForm({ ...form, config: { ...form.config, discount_percent: parseInt(e.target.value || '0') } })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Apply To</label>
+                          <select
+                            value={form.config.apply_to}
+                            onChange={e => setForm({ ...form, config: { ...form.config, apply_to: e.target.value } })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                          >
+                            {APPLY_TO_TYPES.map(t => (
+                              <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 border-t border-slate-100 pt-6">
+                      <p className="text-slate-900 font-bold">Decume Daily — Marketing Copy</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Headline (brand mark)</label>
+                          <input
+                            type="text"
+                            value={form.display.headline}
+                            onChange={e => setForm({ ...form, display: { ...form.display, headline: e.target.value } })}
+                            placeholder="Decume Daily"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Subheadline</label>
+                          <input
+                            type="text"
+                            value={form.display.subheadline}
+                            onChange={e => setForm({ ...form, display: { ...form.display, subheadline: e.target.value } })}
+                            placeholder="50% OFF on Versace Eros and Interlude 53"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Marquee Text</label>
+                        <input
+                          type="text"
+                          value={form.display.marquee_text}
+                          onChange={e => setForm({ ...form, display: { ...form.display, marquee_text: e.target.value } })}
+                          placeholder="Versace Eros · Interlude 53 · 50% OFF until midnight"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">CTA Label</label>
+                          <input
+                            type="text"
+                            value={form.display.cta_label}
+                            onChange={e => setForm({ ...form, display: { ...form.display, cta_label: e.target.value } })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">CTA Link</label>
+                          <input
+                            type="text"
+                            value={form.display.cta_href}
+                            onChange={e => setForm({ ...form, display: { ...form.display, cta_href: e.target.value } })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Accent Color</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={form.display.accent_color}
+                              onChange={e => setForm({ ...form, display: { ...form.display, accent_color: e.target.value } })}
+                              className="w-12 h-[46px] rounded-lg border border-slate-200 bg-slate-50 cursor-pointer"
+                            />
+                            <input
+                              type="text"
+                              value={form.display.accent_color}
+                              onChange={e => setForm({ ...form, display: { ...form.display, accent_color: e.target.value } })}
+                              className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Hero Image URL (optional)</label>
+                        <input
+                          type="text"
+                          value={form.display.hero_image}
+                          onChange={e => setForm({ ...form, display: { ...form.display, hero_image: e.target.value } })}
+                          placeholder="https://..."
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 {form.type === 'free_decant' && (
                   <>
                     <div className="border-t border-slate-100 pt-6 space-y-4">
@@ -603,12 +800,18 @@ export default function OfferManagement() {
                         </div>
                       </div>
                     </div>
+                  </>
+                )}
 
+                {(form.type === 'free_decant' || form.type === 'daily_deal') && (
+                  <>
                     <div className="space-y-4 border-t border-slate-100 pt-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-slate-900 font-bold">Eligible Products</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{form.config.eligible_product_ids.length} of {allProducts.length} selected</p>
+                          <p className="text-slate-900 font-bold">
+                            {form.type === 'daily_deal' ? 'Deal Products' : 'Eligible Products'}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">{selectedProductIds.length} of {allProducts.length} selected</p>
                         </div>
                         <div className="flex items-center space-x-2">
                           <button type="button" onClick={selectAllProducts} className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all">Select All</button>
@@ -630,7 +833,7 @@ export default function OfferManagement() {
                           <p className="text-xs text-slate-400 italic text-center py-4">No products found</p>
                         ) : filteredModalProducts.map(product => {
                           const pid = getId(product);
-                          const isSelected = form.config.eligible_product_ids.includes(pid);
+                          const isSelected = selectedProductIds.includes(pid);
                           return (
                             <button
                               key={pid}
