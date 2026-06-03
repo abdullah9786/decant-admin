@@ -20,7 +20,7 @@ export default function CategoryManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
   const [currentCategory, setCurrentCategory] = useState({
-    name: '', slug: '', description: '', image_url: '', is_active: true, sort_order: 0
+    name: '', slug: '', description: '', image_url: '', is_active: true, is_featured: false, sort_order: 0
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
@@ -51,7 +51,7 @@ export default function CategoryManagement() {
   }, []);
 
   const resetForm = () => ({
-    name: '', slug: '', description: '', image_url: '', is_active: true, sort_order: 0
+    name: '', slug: '', description: '', image_url: '', is_active: true, is_featured: false, sort_order: 0
   });
 
   const getId = (p: any) => p.id || p._id;
@@ -75,6 +75,7 @@ export default function CategoryManagement() {
       description: cat.description || '',
       image_url: cat.image_url || '',
       is_active: cat.is_active !== false,
+      is_featured: cat.is_featured || false,
       sort_order: cat.sort_order ?? 0
     });
     const catId = cat._id;
@@ -307,6 +308,9 @@ export default function CategoryManagement() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-2">
                       <h3 className="font-bold text-slate-900 text-lg truncate">{cat.name}</h3>
+                      {cat.is_featured && (
+                        <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-tighter shrink-0">Featured</span>
+                      )}
                       {!cat.is_active && (
                         <span className="bg-slate-100 text-slate-500 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-tighter shrink-0">Hidden</span>
                       )}
@@ -438,6 +442,22 @@ export default function CategoryManagement() {
                       </label>
                     </div>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">Featured on homepage</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Shows in the Top Categories section below the hero banner</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={currentCategory.is_featured}
+                      onChange={(e) => setCurrentCategory({ ...currentCategory, is_featured: e.target.checked })}
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500" />
+                  </label>
                 </div>
 
                 <div className="space-y-2">

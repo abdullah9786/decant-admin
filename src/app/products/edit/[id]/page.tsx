@@ -17,6 +17,7 @@ import {
 import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi, chipApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 import ChipPickerSection from '@/components/shared/ChipPickerSection';
+import { defaultVariantButtonLabel, serializeVariantForApi } from '@/lib/productVariant';
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -104,7 +105,10 @@ export default function EditProductPage() {
           category_ids: product.category_ids || [],
           chip_ids: product.chip_ids || [],
         });
-        setVariants(product.variants || []);
+        setVariants((product.variants || []).map((v: any) => ({
+          ...v,
+          label: v.label || '',
+        })));
       } catch (err: any) {
         console.error("Error fetching product:", err);
         setError("Failed to load product data. It may have been deleted.");
@@ -236,12 +240,7 @@ export default function EditProductPage() {
         notes_base: splitNotes(formData.notes_base),
         variants: variants
           .filter(v => parseFloat(String(v.price)) > 0)
-          .map(v => ({
-            size_ml: parseInt(String(v.size_ml)),
-            price: parseFloat(String(v.price)),
-            is_pack: !!(v as any).is_pack,
-            stock: (v as any).is_pack ? parseInt(String((v as any).stock || 0)) : 0,
-          }))
+          .map(serializeVariantForApi)
       };
 
       if (productPayload.variants.length === 0) {
@@ -512,7 +511,10 @@ export default function EditProductPage() {
 
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
             <div className="flex items-center justify-between">
-              <div className="text-slate-900 font-bold">Variants</div>
+              <div>
+                <div className="text-slate-900 font-bold">Variants</div>
+                <p className="text-xs text-slate-400 mt-1">Leave button label blank to show size (e.g. 5ML). Set a custom label like Trial or Best Value to override.</p>
+              </div>
               <button 
                 type="button"
                 onClick={addVariant}
@@ -545,16 +547,19 @@ export default function EditProductPage() {
               </div>
             </div>
             <div className="space-y-3">
-              <div className="grid grid-cols-[1fr_1fr_auto_auto_auto] gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-2">
+              <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto_auto_auto] gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-2">
                 <span>Size</span>
+                <span>Button label (optional)</span>
                 <span>Price</span>
                 <span className="w-16 text-center">Pack</span>
                 <span className="w-20 text-center">Stock</span>
                 <span className="w-10" />
               </div>
               {variants.map((variant: any, i: number) => (
-                <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto_auto] gap-3 items-center">
-                  <div className="relative">
+                <div key={i} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto_auto_auto] gap-3 items-center p-3 md:p-0 rounded-xl md:rounded-none border md:border-0 border-slate-100">
+                  <div>
+                    <label className="md:hidden text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Size</label>
+                    <div className="relative">
                     <input 
                       type="number"
                       value={variant.size_ml}
@@ -563,14 +568,29 @@ export default function EditProductPage() {
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">ML</span>
+                    </div>
                   </div>
+                  <div>
+                    <label className="md:hidden text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Button label</label>
+                    <input
+                      type="text"
+                      value={variant.label || ''}
+                      onChange={(e) => handleVariantChange(i, 'label', e.target.value)}
+                      maxLength={24}
+                      placeholder={`Default: ${defaultVariantButtonLabel(variant)}`}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="md:hidden text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Price</label>
                   <input 
                     type="number" 
                     value={variant.price}
                     onChange={(e) => handleVariantChange(i, 'price', e.target.value)}
                     placeholder="Price" 
-                    className="px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-400" 
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-400" 
                   />
+                  </div>
                   <label className="w-16 flex items-center justify-center cursor-pointer">
                     <input
                       type="checkbox"
