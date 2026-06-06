@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { 
@@ -19,6 +19,11 @@ import RichTextEditor from '@/components/shared/RichTextEditor';
 import ChipPickerSection from '@/components/shared/ChipPickerSection';
 import SetItemsEditor, { type SetItemDraft } from '@/components/products/SetItemsEditor';
 import { defaultVariantButtonLabel, serializeVariantForApi } from '@/lib/productVariant';
+import {
+  createEmptySnapshot,
+  type ProductFormSnapshot,
+} from '@/lib/productFormDefaults';
+import { mapSetItemsFromApi, normalizeProductId } from '@/lib/productIds';
 
 const SET_DISPLAY_BRAND = 'Curated';
 
@@ -83,6 +88,28 @@ export default function EditProductPage() {
   const [fetchingFamilies, setFetchingFamilies] = useState(true);
   const [brands, setBrands] = useState<any[]>([]);
   const [fetchingBrands, setFetchingBrands] = useState(true);
+  const loadedSnapshotRef = useRef<ProductFormSnapshot | null>(null);
+
+  const handleProductTypeChange = (type: 'single' | 'set') => {
+    if (type === productType) return;
+
+    const loaded = loadedSnapshotRef.current;
+    if (loaded && loaded.productType === type) {
+      setProductType(type);
+      setFormData({ ...loaded.formData });
+      setVariants(loaded.variants.map((v) => ({ ...v })));
+      setSetItems(loaded.setItems.map((item) => ({ ...item })));
+      setBasePrice100ml(loaded.basePrice100ml);
+    } else {
+      const empty = createEmptySnapshot(brands, fragranceFamilies, allBottles, type);
+      setProductType(type);
+      setFormData(empty.formData);
+      setVariants(empty.variants);
+      setSetItems(empty.setItems);
+      setBasePrice100ml(empty.basePrice100ml);
+    }
+    setError(null);
+  };
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -113,17 +140,41 @@ export default function EditProductPage() {
           chip_ids: product.chip_ids || [],
         });
         setProductType(product.product_type === 'set' ? 'set' : 'single');
-        setSetItems(
-          (product.set_items || []).map((item: any) => ({
-            product_id: item.product_id,
-            name: item.name,
-            brand: item.brand,
-          })),
-        );
-        setVariants((product.variants || []).map((v: any) => ({
+        const loadedSetItems = mapSetItemsFromApi(product.set_items);
+        const loadedVariants = (product.variants || []).map((v: any) => ({
           ...v,
           label: v.label || '',
-        })));
+        }));
+        setSetItems(loadedSetItems);
+        setVariants(loadedVariants);
+        loadedSnapshotRef.current = {
+          productType: product.product_type === 'set' ? 'set' : 'single',
+          formData: {
+            name: product.name,
+            brand: product.brand,
+            fragrance_family: product.fragrance_family || '',
+            description: product.description,
+            image_url: product.image_url || '',
+            images: product.images || [],
+            stock_ml: product.stock_ml || 0,
+            sort_order: product.sort_order || 0,
+            is_featured: product.is_featured || false,
+            is_new_arrival: product.is_new_arrival || false,
+            is_active: product.is_active !== undefined ? product.is_active : true,
+            notes_top: (product.notes_top || []).join('\n'),
+            notes_middle: (product.notes_middle || []).join('\n'),
+            notes_base: (product.notes_base || []).join('\n'),
+            notes_top_desc: product.notes_top_desc || '',
+            notes_middle_desc: product.notes_middle_desc || '',
+            notes_base_desc: product.notes_base_desc || '',
+            bottle_ids: product.bottle_ids || [],
+            category_ids: product.category_ids || [],
+            chip_ids: product.chip_ids || [],
+          },
+          variants: loadedVariants,
+          setItems: loadedSetItems,
+          basePrice100ml: '',
+        };
       } catch (err: any) {
         console.error("Error fetching product:", err);
         setError("Failed to load product data. It may have been deleted.");
@@ -268,7 +319,9 @@ export default function EditProductPage() {
           setSaving(false);
           return;
         }
-        productPayload.set_items = setItems.map((item) => ({ product_id: item.product_id }));
+        productPayload.set_items = setItems
+          .map((item) => ({ product_id: normalizeProductId(item.product_id) }))
+          .filter((item) => item.product_id);
         productPayload.brand = SET_DISPLAY_BRAND;
         productPayload.fragrance_family = '';
       } else {
@@ -376,14 +429,14 @@ export default function EditProductPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setProductType('single')}
+                    onClick={() => handleProductTypeChange('single')}
                     className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${productType === 'single' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'}`}
                   >
                     Single Fragrance
                   </button>
                   <button
                     type="button"
-                    onClick={() => setProductType('set')}
+                    onClick={() => handleProductTypeChange('set')}
                     className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${productType === 'set' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'}`}
                   >
                     Curated Set
@@ -506,7 +559,12 @@ export default function EditProductPage() {
 
           {productType === 'set' && (
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <SetItemsEditor items={setItems} onChange={setSetItems} catalog={catalogProducts} />
+            <SetItemsEditor
+              items={setItems}
+              onChange={setSetItems}
+              catalog={catalogProducts}
+              excludeProductId={productId}
+            />
           </section>
           )}
 

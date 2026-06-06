@@ -20,6 +20,11 @@ import RichTextEditor from '@/components/shared/RichTextEditor';
 import ChipPickerSection from '@/components/shared/ChipPickerSection';
 import SetItemsEditor, { type SetItemDraft } from '@/components/products/SetItemsEditor';
 import { AdminVariant, defaultVariantButtonLabel, serializeVariantForApi } from '@/lib/productVariant';
+import {
+  DEFAULT_VARIANTS,
+  createEmptySnapshot,
+} from '@/lib/productFormDefaults';
+import { normalizeProductId } from '@/lib/productIds';
 
 const SET_DISPLAY_BRAND = 'Curated';
 
@@ -154,12 +159,23 @@ export default function AddProductPage() {
     }));
   };
 
-  const [variants, setVariants] = useState<AdminVariant[]>([
-    { size_ml: 5, price: 0, is_pack: false, stock: 0 },
-    { size_ml: 10, price: 0, is_pack: false, stock: 0 },
-  ]);
+  const [variants, setVariants] = useState<AdminVariant[]>(() =>
+    DEFAULT_VARIANTS.map((v) => ({ ...v })),
+  );
 
   const [basePrice100ml, setBasePrice100ml] = useState<number | string>('');
+
+  const handleProductTypeChange = (type: 'single' | 'set') => {
+    if (type === productType) return;
+
+    const empty = createEmptySnapshot(brands, fragranceFamilies, allBottles, type);
+    setProductType(type);
+    setFormData(empty.formData);
+    setVariants(empty.variants);
+    setSetItems(empty.setItems);
+    setBasePrice100ml(empty.basePrice100ml);
+    setError(null);
+  };
 
   const handleBasePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -241,7 +257,9 @@ export default function AddProductPage() {
           setLoading(false);
           return;
         }
-        productPayload.set_items = setItems.map((item) => ({ product_id: item.product_id }));
+        productPayload.set_items = setItems
+          .map((item) => ({ product_id: normalizeProductId(item.product_id) }))
+          .filter((item) => item.product_id);
         productPayload.brand = SET_DISPLAY_BRAND;
         productPayload.fragrance_family = '';
       } else {
@@ -450,14 +468,14 @@ export default function AddProductPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setProductType('single')}
+                    onClick={() => handleProductTypeChange('single')}
                     className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${productType === 'single' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'}`}
                   >
                     Single Fragrance
                   </button>
                   <button
                     type="button"
-                    onClick={() => setProductType('set')}
+                    onClick={() => handleProductTypeChange('set')}
                     className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${productType === 'set' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'}`}
                   >
                     Curated Set

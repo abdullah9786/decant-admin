@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { clsx } from "clsx";
+import { getProductId, normalizeProductId } from "@/lib/productIds";
 
 export interface SetItemDraft {
   product_id: string;
@@ -14,30 +15,38 @@ interface SetItemsEditorProps {
   items: SetItemDraft[];
   onChange: (items: SetItemDraft[]) => void;
   catalog: any[];
-}
-
-function getId(p: { id?: string; _id?: string }) {
-  return p.id || p._id || "";
+  excludeProductId?: string;
 }
 
 export default function SetItemsEditor({
   items,
   onChange,
   catalog,
+  excludeProductId,
 }: SetItemsEditorProps) {
   const [productSearch, setProductSearch] = useState("");
 
+  const selectedIdSet = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of items) {
+      const id = normalizeProductId(item.product_id);
+      if (id) ids.add(id);
+    }
+    return ids;
+  }, [items]);
+
   const singles = useMemo(
     () =>
-      (catalog || []).filter(
-        (p) => (p.product_type || "single") !== "set" && p.is_active !== false,
-      ),
-    [catalog],
-  );
-
-  const selectedIds = useMemo(
-    () => items.map((item) => item.product_id),
-    [items],
+      (catalog || []).filter((p) => {
+        const pid = getProductId(p);
+        if (excludeProductId && pid === normalizeProductId(excludeProductId)) {
+          return false;
+        }
+        if ((p.product_type || "single") === "set") return false;
+        if (selectedIdSet.has(pid)) return true;
+        return p.is_active !== false;
+      }),
+    [catalog, excludeProductId, selectedIdSet],
   );
 
   const filteredProducts = useMemo(
@@ -51,11 +60,13 @@ export default function SetItemsEditor({
   );
 
   const toggleProduct = (pid: string) => {
-    if (selectedIds.includes(pid)) {
-      onChange(items.filter((item) => item.product_id !== pid));
+    if (selectedIdSet.has(pid)) {
+      onChange(
+        items.filter((item) => normalizeProductId(item.product_id) !== pid),
+      );
       return;
     }
-    const product = singles.find((p) => getId(p) === pid);
+    const product = singles.find((p) => getProductId(p) === pid);
     if (!product) return;
     onChange([
       ...items,
@@ -68,13 +79,20 @@ export default function SetItemsEditor({
   };
 
   const selectAll = () => {
-    const visibleIds = filteredProducts.map((p) => getId(p));
-    const nextIds = Array.from(new Set([...selectedIds, ...visibleIds]));
+    const visibleIds = filteredProducts.map((p) => getProductId(p)).filter(Boolean);
+    const nextIds = Array.from(new Set([...selectedIdSet, ...visibleIds]));
     onChange(
       nextIds.map((pid) => {
-        const existing = items.find((item) => item.product_id === pid);
-        if (existing) return existing;
-        const product = singles.find((p) => getId(p) === pid);
+        const existing = items.find(
+          (item) => normalizeProductId(item.product_id) === pid,
+        );
+        if (existing) {
+          return {
+            ...existing,
+            product_id: pid,
+          };
+        }
+        const product = singles.find((p) => getProductId(p) === pid);
         return {
           product_id: pid,
           name: product?.name,
@@ -97,8 +115,8 @@ export default function SetItemsEditor({
             Select fragrances shown in &quot;Included Fragrances&quot; on the storefront. Set sizes are configured in Variants below.
           </p>
           <p className="text-xs text-slate-400 mt-1">
-            {selectedIds.length} of {singles.length} selected
-            {selectedIds.length > 0 && selectedIds.length < 2 && (
+            {selectedIdSet.size} of {singles.length} selected
+            {selectedIdSet.size > 0 && selectedIdSet.size < 2 && (
               <span className="text-amber-600 font-medium"> · at least 2 required</span>
             )}
           </p>
@@ -115,7 +133,7 @@ export default function SetItemsEditor({
           <button
             type="button"
             onClick={removeAll}
-            disabled={selectedIds.length === 0}
+            disabled={selectedIdSet.size === 0}
             className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all disabled:opacity-40"
           >
             Remove All
@@ -123,7 +141,24 @@ export default function SetItemsEditor({
         </div>
       </div>
 
-      {singles.length === 0 && (
+      {selectedIdSet.size > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {items.map((item) => {
+            const pid = normalizeProductId(item.product_id);
+            if (!pid) return null;
+            return (
+              <span
+                key={pid}
+                className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[11px] font-semibold text-indigo-700"
+              >
+                {item.name || pid}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {singles.length === 0 && selectedIdSet.size === 0 && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
           Add single fragrances to your catalog before creating a set.
         </p>
@@ -152,8 +187,8 @@ export default function SetItemsEditor({
               </p>
             ) : (
               filteredProducts.map((product) => {
-                const pid = getId(product);
-                const isSelected = selectedIds.includes(pid);
+                const pid = getProductId(product);
+                const isSelected = selectedIdSet.has(pid);
                 return (
                   <button
                     key={pid}
