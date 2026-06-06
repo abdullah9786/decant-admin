@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import { clsx } from "clsx";
 
 export interface SetItemDraft {
   product_id: string;
@@ -15,11 +16,17 @@ interface SetItemsEditorProps {
   catalog: any[];
 }
 
+function getId(p: { id?: string; _id?: string }) {
+  return p.id || p._id || "";
+}
+
 export default function SetItemsEditor({
   items,
   onChange,
   catalog,
 }: SetItemsEditorProps) {
+  const [productSearch, setProductSearch] = useState("");
+
   const singles = useMemo(
     () =>
       (catalog || []).filter(
@@ -28,37 +35,57 @@ export default function SetItemsEditor({
     [catalog],
   );
 
-  const addItem = () => {
-    const first = singles[0];
-    if (!first) return;
-    const pid = first.id || first._id;
+  const selectedIds = useMemo(
+    () => items.map((item) => item.product_id),
+    [items],
+  );
+
+  const filteredProducts = useMemo(
+    () =>
+      singles.filter(
+        (p) =>
+          (p.name || "").toLowerCase().includes(productSearch.toLowerCase()) ||
+          (p.brand || "").toLowerCase().includes(productSearch.toLowerCase()),
+      ),
+    [singles, productSearch],
+  );
+
+  const toggleProduct = (pid: string) => {
+    if (selectedIds.includes(pid)) {
+      onChange(items.filter((item) => item.product_id !== pid));
+      return;
+    }
+    const product = singles.find((p) => getId(p) === pid);
+    if (!product) return;
     onChange([
       ...items,
       {
         product_id: pid,
-        name: first.name,
-        brand: first.brand,
+        name: product.name,
+        brand: product.brand,
       },
     ]);
   };
 
-  const updateItem = (index: number, productId: string) => {
-    const product = singles.find((p) => (p.id || p._id) === productId);
+  const selectAll = () => {
+    const visibleIds = filteredProducts.map((p) => getId(p));
+    const nextIds = Array.from(new Set([...selectedIds, ...visibleIds]));
     onChange(
-      items.map((item, i) =>
-        i === index
-          ? {
-              product_id: productId,
-              name: product?.name,
-              brand: product?.brand,
-            }
-          : item,
-      ),
+      nextIds.map((pid) => {
+        const existing = items.find((item) => item.product_id === pid);
+        if (existing) return existing;
+        const product = singles.find((p) => getId(p) === pid);
+        return {
+          product_id: pid,
+          name: product?.name,
+          brand: product?.brand,
+        };
+      }),
     );
   };
 
-  const removeItem = (index: number) => {
-    onChange(items.filter((_, i) => i !== index));
+  const removeAll = () => {
+    onChange([]);
   };
 
   return (
@@ -67,18 +94,33 @@ export default function SetItemsEditor({
         <div>
           <p className="text-sm font-bold text-slate-900">Included Fragrances</p>
           <p className="text-xs text-slate-500 mt-1">
-            Link products shown in &quot;Included Fragrances&quot; on the storefront. Set sizes are configured in Variants below.
+            Select fragrances shown in &quot;Included Fragrances&quot; on the storefront. Set sizes are configured in Variants below.
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            {selectedIds.length} of {singles.length} selected
+            {selectedIds.length > 0 && selectedIds.length < 2 && (
+              <span className="text-amber-600 font-medium"> · at least 2 required</span>
+            )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={addItem}
-          disabled={singles.length === 0}
-          className="inline-flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 disabled:opacity-40"
-        >
-          <Plus size={14} />
-          Add fragrance
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={selectAll}
+            disabled={singles.length === 0}
+            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all disabled:opacity-40"
+          >
+            Select All
+          </button>
+          <button
+            type="button"
+            onClick={removeAll}
+            disabled={selectedIds.length === 0}
+            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all disabled:opacity-40"
+          >
+            Remove All
+          </button>
+        </div>
       </div>
 
       {singles.length === 0 && (
@@ -87,42 +129,93 @@ export default function SetItemsEditor({
         </p>
       )}
 
-      <div className="space-y-3">
-        {items.map((item, index) => (
-          <div
-            key={`${item.product_id}-${index}`}
-            className="grid grid-cols-1 md:grid-cols-[1fr_40px] gap-3 items-end p-4 bg-slate-50 border border-slate-200 rounded-xl"
-          >
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Fragrance
-              </label>
-              <select
-                value={item.product_id}
-                onChange={(e) => updateItem(index, e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm"
-              >
-                {singles.map((p) => {
-                  const pid = p.id || p._id;
-                  return (
-                    <option key={pid} value={pid}>
-                      {p.name} — {p.brand}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={() => removeItem(index)}
-              className="p-2.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              aria-label="Remove fragrance"
-            >
-              <Trash2 size={16} />
-            </button>
+      {singles.length > 0 && (
+        <>
+          <div className="relative">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              size={14}
+            />
+            <input
+              type="text"
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              placeholder="Search products..."
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+            />
           </div>
-        ))}
-      </div>
+
+          <div className="max-h-72 overflow-y-auto space-y-1 border border-slate-100 rounded-xl p-2">
+            {filteredProducts.length === 0 ? (
+              <p className="text-xs text-slate-400 italic text-center py-4">
+                No products found
+              </p>
+            ) : (
+              filteredProducts.map((product) => {
+                const pid = getId(product);
+                const isSelected = selectedIds.includes(pid);
+                return (
+                  <button
+                    key={pid}
+                    type="button"
+                    onClick={() => toggleProduct(pid)}
+                    className={clsx(
+                      "w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all",
+                      isSelected
+                        ? "bg-indigo-50 border border-indigo-200"
+                        : "hover:bg-slate-50 border border-transparent",
+                    )}
+                  >
+                    <div
+                      className={clsx(
+                        "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                        isSelected
+                          ? "bg-indigo-600 border-indigo-600"
+                          : "border-slate-300",
+                      )}
+                    >
+                      {isSelected && (
+                        <svg
+                          className="w-2.5 h-2.5 text-white"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={3}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="w-8 h-8 rounded bg-slate-100 overflow-hidden flex-shrink-0">
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-[8px] text-slate-400 flex items-center justify-center h-full">
+                          IMG
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-900 truncate">
+                        {product.name}
+                      </p>
+                      <p className="text-[10px] text-slate-400">{product.brand}</p>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
