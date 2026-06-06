@@ -15,13 +15,17 @@ import {
   FileJson,
   X
 } from 'lucide-react';
-import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi, chipApi } from '@/lib/api';
+import { productApi, categoryApi, bottleApi, chipApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 import ChipPickerSection from '@/components/shared/ChipPickerSection';
+import SetItemsEditor, { type SetItemDraft } from '@/components/products/SetItemsEditor';
 import { AdminVariant, defaultVariantButtonLabel, serializeVariantForApi } from '@/lib/productVariant';
 import { DEFAULT_VARIANTS } from '@/lib/productFormDefaults';
+import { normalizeProductId } from '@/lib/productIds';
 
-export default function AddProductPage() {
+const SET_DISPLAY_BRAND = 'Curated';
+
+export default function AddCuratedSetPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -51,47 +55,11 @@ export default function AddProductPage() {
     chip_ids: [] as string[],
   });
 
-  const [fragranceFamilies, setFragranceFamilies] = useState<any[]>([]);
-  const [fetchingFamilies, setFetchingFamilies] = useState(true);
+  const [setItems, setSetItems] = useState<SetItemDraft[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
   const [allCategories, setAllCategories] = useState<any[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
   const [allBottles, setAllBottles] = useState<any[]>([]);
   const [allChips, setAllChips] = useState<any[]>([]);
-  const [fetchingBrands, setFetchingBrands] = useState(true);
-
-  React.useEffect(() => {
-    const fetchFamilies = async () => {
-      try {
-        const response = await fragranceFamilyApi.getAll();
-        setFragranceFamilies(response.data);
-        if (response.data.length > 0) {
-          setFormData(prev => ({ ...prev, fragrance_family: response.data[0].name }));
-        }
-      } catch (err) {
-        console.error("Error fetching fragrance families:", err);
-      } finally {
-        setFetchingFamilies(false);
-      }
-    };
-    fetchFamilies();
-  }, []);
-
-  React.useEffect(() => {
-    const fetchBrands = async () => {
-      try {
-        const response = await brandApi.getAll();
-        setBrands(response.data);
-        if (response.data.length > 0) {
-          setFormData(prev => ({ ...prev, brand: response.data[0].name }));
-        }
-      } catch (err) {
-        console.error("Error fetching brands:", err);
-      } finally {
-        setFetchingBrands(false);
-      }
-    };
-    fetchBrands();
-  }, []);
 
   React.useEffect(() => {
     bottleApi.getAll({ include_inactive: true }).then(res => {
@@ -102,6 +70,9 @@ export default function AddProductPage() {
     }).catch(() => {});
     chipApi.getAll().then(res => {
       setAllChips(res.data || []);
+    }).catch(() => {});
+    productApi.getAll({ include_inactive: true }).then(res => {
+      setCatalogProducts(res.data || []);
     }).catch(() => {});
   }, []);
 
@@ -213,11 +184,12 @@ export default function AddProductPage() {
           .filter(Boolean);
       const productPayload: any = {
         ...formData,
-        product_type: 'single',
-        set_items: [],
-        stock_ml: parseInt(String(formData.stock_ml || 0)),
+        product_type: 'set',
+        stock_ml: 0,
         sort_order: parseInt(String(formData.sort_order || 0)),
         chip_ids: formData.chip_ids,
+        brand: SET_DISPLAY_BRAND,
+        fragrance_family: '',
         notes_top: splitNotes(formData.notes_top),
         notes_middle: splitNotes(formData.notes_middle),
         notes_base: splitNotes(formData.notes_base),
@@ -225,6 +197,15 @@ export default function AddProductPage() {
           .filter(v => parseFloat(String(v.price)) > 0)
           .map(serializeVariantForApi),
       };
+
+      if (setItems.length < 2) {
+        setError('Please link at least 2 fragrances to the set.');
+        setLoading(false);
+        return;
+      }
+      productPayload.set_items = setItems
+        .map((item) => ({ product_id: normalizeProductId(item.product_id) }))
+        .filter((item) => item.product_id);
 
       if (productPayload.variants.length === 0) {
         setError("Please add at least one variant with a price.");
@@ -258,7 +239,7 @@ export default function AddProductPage() {
       await productApi.create(productPayload);
       setSuccess(true);
       setTimeout(() => {
-        router.push('/products');
+        router.push('/curated-sets');
       }, 1500);
     } catch (err: any) {
       console.error("Error creating product:", err);
@@ -336,10 +317,10 @@ export default function AddProductPage() {
           <CheckCircle2 size={40} />
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900">Product Created!</h2>
-          <p className="text-slate-500 mt-2">The perfume has been added to your catalog successfully.</p>
+          <h2 className="text-2xl font-bold text-slate-900">Curated Set Created!</h2>
+          <p className="text-slate-500 mt-2">The set has been added to your catalog successfully.</p>
         </div>
-        <p className="text-xs text-slate-400 animate-pulse">Redirecting to products list...</p>
+        <p className="text-xs text-slate-400 animate-pulse">Redirecting to curated sets...</p>
       </div>
     );
   }
@@ -348,16 +329,16 @@ export default function AddProductPage() {
     <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Link href="/products" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+          <Link href="/curated-sets" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-slate-500" />
           </Link>
           <div>
             <nav className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center mb-1">
-              <Link href="/products">Products</Link>
+              <Link href="/curated-sets">Curated Sets</Link>
               <ChevronRight size={10} className="mx-2" />
-              <span className="text-indigo-600">New Product</span>
+              <span className="text-indigo-600">New Set</span>
             </nav>
-            <h1 className="text-2xl font-bold text-slate-900">Add New Perfume</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Add New Set</h1>
           </div>
         </div>
         
@@ -429,82 +410,22 @@ export default function AddProductPage() {
                   required
                   value={formData.name}
                   onChange={handleInputChange}
-                  placeholder="e.g. Aventus" 
+                  placeholder="e.g. Summer Discovery Set" 
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400" 
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Brand</label>
-                  <select 
-                    name="brand"
-                    required
-                    value={formData.brand}
-                    onChange={handleInputChange}
-                    disabled={fetchingBrands}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer disabled:opacity-50"
-                  >
-                    {fetchingBrands ? (
-                      <option>Loading brands...</option>
-                    ) : (
-                      brands.map((brand: any) => (
-                        <option key={brand._id} value={brand.name}>{brand.name}</option>
-                      ))
-                    )}
-                    {brands.length === 0 && !fetchingBrands && (
-                      <option value="">No brands found</option>
-                    )}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Fragrance Family</label>
-                  <select 
-                    name="fragrance_family"
-                    value={formData.fragrance_family}
-                    onChange={handleInputChange}
-                    disabled={fetchingFamilies}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer disabled:opacity-50"
-                  >
-                    {fetchingFamilies ? (
-                      <option>Loading fragrance families...</option>
-                    ) : (
-                      fragranceFamilies.map((fam: any) => (
-                        <option key={fam._id} value={fam.name}>{fam.name}</option>
-                      ))
-                    )}
-                    {fragranceFamilies.length === 0 && !fetchingFamilies && (
-                      <option value="">No fragrance families found</option>
-                    )}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Stock (ml)</label>
-                  <input
-                    name="stock_ml"
-                    type="number"
-                    min={0}
-                    value={formData.stock_ml}
-                    onChange={handleInputChange}
-                    placeholder="e.g. 500"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
-                  />
-                  <p className="text-[10px] text-slate-400">Total available ml for this bottle.</p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Display Order</label>
-                  <input
-                    name="sort_order"
-                    type="number"
-                    min={0}
-                    value={formData.sort_order}
-                    onChange={handleInputChange}
-                    placeholder="e.g. 1"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
-                  />
-                  <p className="text-[10px] text-slate-400">Lower numbers appear first on the site.</p>
-                </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Display Order</label>
+                <input
+                  name="sort_order"
+                  type="number"
+                  min={0}
+                  value={formData.sort_order}
+                  onChange={handleInputChange}
+                  placeholder="e.g. 1"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+                />
+                <p className="text-[10px] text-slate-400">Lower numbers appear first on the site.</p>
               </div>
             </div>
           </section>
@@ -514,8 +435,12 @@ export default function AddProductPage() {
             <RichTextEditor 
               value={formData.description}
               onChange={(content: string) => setFormData(prev => ({ ...prev, description: content }))}
-              placeholder="Describe the fragrance notes and character..." 
+              placeholder="Describe this curated set..." 
             />
+          </section>
+
+          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <SetItemsEditor items={setItems} onChange={setSetItems} catalog={catalogProducts} />
           </section>
 
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -865,7 +790,7 @@ export default function AddProductPage() {
             <div className="text-slate-900 font-bold">Actions</div>
             {error && <div className="text-xs font-bold text-red-500 uppercase tracking-tight">{String(error)}</div>}
             <div className="flex items-center space-x-3">
-              <Link href="/products" className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
+              <Link href="/curated-sets" className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
                 Cancel
               </Link>
               <button 
@@ -874,7 +799,7 @@ export default function AddProductPage() {
                 className="flex-1 bg-indigo-600 text-white px-6 py-2.5 rounded-xl flex items-center justify-center space-x-2 font-bold text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50"
               >
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                <span>{loading ? 'Saving...' : 'Save Product'}</span>
+                <span>{loading ? 'Saving...' : 'Save Set'}</span>
               </button>
             </div>
           </section>

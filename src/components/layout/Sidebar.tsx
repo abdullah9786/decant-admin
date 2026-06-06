@@ -26,6 +26,7 @@ import {
   Gift,
   Percent,
   BadgeCheck,
+  Layers,
 } from 'lucide-react';
 import { PerfumeBottle } from '@/components/icons/PerfumeBottle';
 import { clsx, type ClassValue } from 'clsx';
@@ -38,6 +39,7 @@ function cn(...inputs: ClassValue[]) {
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Products', href: '/products', icon: Package },
+  { name: 'Curated Sets', href: '/curated-sets', icon: Layers },
   { name: 'Brands', href: '/brands', icon: Sparkles },
   { name: 'Fragrance Families', href: '/fragrance-families', icon: Tag },
   { name: 'Categories', href: '/categories', icon: FolderOpen },

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { 
   ArrowLeft, 
   Upload, 
@@ -12,18 +12,24 @@ import {
   ChevronRight,
   Loader2,
   CheckCircle2,
-  FileJson,
-  X
+  Save
 } from 'lucide-react';
-import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi, chipApi } from '@/lib/api';
+import { productApi, categoryApi, bottleApi, chipApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 import ChipPickerSection from '@/components/shared/ChipPickerSection';
-import { AdminVariant, defaultVariantButtonLabel, serializeVariantForApi } from '@/lib/productVariant';
-import { DEFAULT_VARIANTS } from '@/lib/productFormDefaults';
+import SetItemsEditor, { type SetItemDraft } from '@/components/products/SetItemsEditor';
+import { defaultVariantButtonLabel, serializeVariantForApi } from '@/lib/productVariant';
+import { mapSetItemsFromApi, normalizeProductId } from '@/lib/productIds';
 
-export default function AddProductPage() {
+const SET_DISPLAY_BRAND = 'Curated';
+
+export default function EditCuratedSetPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const params = useParams();
+  const productId = params.id as string;
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +38,8 @@ export default function AddProductPage() {
     brand: '',
     fragrance_family: '',
     description: '',
-    image_url: '', // Primary Image
-    images: [] as string[], // Additional Images
+    image_url: '',
+    images: [] as string[],
     stock_ml: 0,
     sort_order: 0,
     is_featured: false,
@@ -51,72 +57,83 @@ export default function AddProductPage() {
     chip_ids: [] as string[],
   });
 
-  const [fragranceFamilies, setFragranceFamilies] = useState<any[]>([]);
-  const [fetchingFamilies, setFetchingFamilies] = useState(true);
-  const [allCategories, setAllCategories] = useState<any[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
+  const [setItems, setSetItems] = useState<SetItemDraft[]>([]);
+  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
   const [allBottles, setAllBottles] = useState<any[]>([]);
+  const [allCategories, setAllCategories] = useState<any[]>([]);
   const [allChips, setAllChips] = useState<any[]>([]);
-  const [fetchingBrands, setFetchingBrands] = useState(true);
+  const [variants, setVariants] = useState<any[]>([]);
+  const [basePrice100ml, setBasePrice100ml] = useState<number | string>('');
 
-  React.useEffect(() => {
-    const fetchFamilies = async () => {
-      try {
-        const response = await fragranceFamilyApi.getAll();
-        setFragranceFamilies(response.data);
-        if (response.data.length > 0) {
-          setFormData(prev => ({ ...prev, fragrance_family: response.data[0].name }));
-        }
-      } catch (err) {
-        console.error("Error fetching fragrance families:", err);
-      } finally {
-        setFetchingFamilies(false);
-      }
-    };
-    fetchFamilies();
-  }, []);
-
-  React.useEffect(() => {
-    const fetchBrands = async () => {
-      try {
-        const response = await brandApi.getAll();
-        setBrands(response.data);
-        if (response.data.length > 0) {
-          setFormData(prev => ({ ...prev, brand: response.data[0].name }));
-        }
-      } catch (err) {
-        console.error("Error fetching brands:", err);
-      } finally {
-        setFetchingBrands(false);
-      }
-    };
-    fetchBrands();
-  }, []);
-
-  React.useEffect(() => {
-    bottleApi.getAll({ include_inactive: true }).then(res => {
-      setAllBottles(res.data || []);
-    }).catch(() => {});
-    categoryApi.getAll({ include_inactive: true }).then(res => {
-      setAllCategories(res.data || []);
-    }).catch(() => {});
-    chipApi.getAll().then(res => {
-      setAllChips(res.data || []);
-    }).catch(() => {});
-  }, []);
-
-  React.useEffect(() => {
-    if (allBottles.length === 0) return;
-    const defaultIds = allBottles
-      .filter((b: any) => b.is_default)
-      .map((b: any) => b.id || b._id);
-    if (defaultIds.length > 0) {
-      setFormData(prev => {
-        if (prev.bottle_ids.length > 0) return prev;
-        return { ...prev, bottle_ids: defaultIds };
-      });
+  const handleBasePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setBasePrice100ml(val);
+    
+    if (val && !isNaN(Number(val))) {
+      const price = Number(val);
+      const updatedVariants = variants.map((v: any) => (
+        v.is_pack ? v : { ...v, price: Math.round((price / 100) * v.size_ml) }
+      ));
+      
+      setVariants(updatedVariants);
     }
-  }, [allBottles]);
+  };
+
+  useEffect(() => {
+    const fetchProduct = async () => {
+      setLoading(true);
+      try {
+        const response = await productApi.getOne(productId);
+        const product = response.data;
+        if (product.product_type !== 'set') {
+          router.replace(`/products/edit/${productId}`);
+          return;
+        }
+        setFormData({
+          name: product.name,
+          brand: product.brand,
+          fragrance_family: product.fragrance_family || '',
+          description: product.description,
+          image_url: product.image_url || '',
+          images: product.images || [],
+          stock_ml: product.stock_ml || 0,
+          sort_order: product.sort_order || 0,
+          is_featured: product.is_featured || false,
+          is_new_arrival: product.is_new_arrival || false,
+          is_active: product.is_active !== undefined ? product.is_active : true,
+          notes_top: (product.notes_top || []).join('\n'),
+          notes_middle: (product.notes_middle || []).join('\n'),
+          notes_base: (product.notes_base || []).join('\n'),
+          notes_top_desc: product.notes_top_desc || '',
+          notes_middle_desc: product.notes_middle_desc || '',
+          notes_base_desc: product.notes_base_desc || '',
+          bottle_ids: product.bottle_ids || [],
+          category_ids: product.category_ids || [],
+          chip_ids: product.chip_ids || [],
+        });
+        setSetItems(mapSetItemsFromApi(product.set_items));
+        setVariants((product.variants || []).map((v: any) => ({
+          ...v,
+          label: v.label || '',
+        })));
+      } catch (err: any) {
+        console.error("Error fetching product:", err);
+        setError("Failed to load product data. It may have been deleted.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (productId) {
+      fetchProduct();
+      bottleApi.getAll({ include_inactive: true }).then(res => setAllBottles(res.data)).catch(() => {});
+      categoryApi.getAll({ include_inactive: true }).then(res => setAllCategories(res.data || [])).catch(() => {});
+      chipApi.getAll().then(res => setAllChips(res.data || [])).catch(() => {});
+      productApi.getAll({ include_inactive: true }).then(res => {
+        setCatalogProducts(res.data || []);
+      }).catch(() => {});
+    }
+  }, [productId, router]);
 
   const toggleBottle = (id: string) => {
     setFormData(prev => ({
@@ -143,24 +160,6 @@ export default function AddProductPage() {
         ? prev.chip_ids.filter(c => c !== id)
         : [...prev.chip_ids, id],
     }));
-  };
-
-  const [variants, setVariants] = useState<AdminVariant[]>(() =>
-    DEFAULT_VARIANTS.map((v) => ({ ...v })),
-  );
-
-  const [basePrice100ml, setBasePrice100ml] = useState<number | string>('');
-
-  const handleBasePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setBasePrice100ml(val);
-    
-    if (val && !isNaN(Number(val))) {
-      const price = Number(val);
-      setVariants(prev => prev.map(v =>
-        v.is_pack ? v : { ...v, price: Math.round((price / 100) * v.size_ml) }
-      ));
-    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -202,7 +201,7 @@ export default function AddProductPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
     setError(null);
 
     try {
@@ -213,22 +212,32 @@ export default function AddProductPage() {
           .filter(Boolean);
       const productPayload: any = {
         ...formData,
-        product_type: 'single',
-        set_items: [],
-        stock_ml: parseInt(String(formData.stock_ml || 0)),
+        product_type: 'set',
+        stock_ml: 0,
         sort_order: parseInt(String(formData.sort_order || 0)),
         chip_ids: formData.chip_ids,
+        brand: SET_DISPLAY_BRAND,
+        fragrance_family: '',
         notes_top: splitNotes(formData.notes_top),
         notes_middle: splitNotes(formData.notes_middle),
         notes_base: splitNotes(formData.notes_base),
         variants: variants
           .filter(v => parseFloat(String(v.price)) > 0)
-          .map(serializeVariantForApi),
+          .map(serializeVariantForApi)
       };
+
+      if (setItems.length < 2) {
+        setError('Please link at least 2 fragrances to the set.');
+        setSaving(false);
+        return;
+      }
+      productPayload.set_items = setItems
+        .map((item) => ({ product_id: normalizeProductId(item.product_id) }))
+        .filter((item) => item.product_id);
 
       if (productPayload.variants.length === 0) {
         setError("Please add at least one variant with a price.");
-        setLoading(false);
+        setSaving(false);
         return;
       }
 
@@ -243,103 +252,51 @@ export default function AddProductPage() {
           .filter((b: any) => !(b.compatible_sizes || []).some((sz: number) => decantSizes.has(sz)));
         if (unmatchedBottles.length > 0) {
           setError(`No matching variants for: ${unmatchedBottles.map((b: any) => b.name).join(', ')}`);
-          setLoading(false);
+          setSaving(false);
           return;
         }
 
         const uncoveredSizes = [...decantSizes].filter(sz => !allBottleSizes.has(sz));
         if (uncoveredSizes.length > 0) {
           setError(`No bottle covers: ${uncoveredSizes.map(s => `${s}ml`).join(', ')}`);
-          setLoading(false);
+          setSaving(false);
           return;
         }
       }
 
-      await productApi.create(productPayload);
+      await productApi.update(productId, productPayload);
       setSuccess(true);
       setTimeout(() => {
-        router.push('/products');
+        router.push('/curated-sets');
       }, 1500);
     } catch (err: any) {
-      console.error("Error creating product:", err);
-      // Detailed error logging for debugging
-      if (err.response?.data?.detail) {
-        console.log("Validation details:", JSON.stringify(err.response.data.detail, null, 2));
-      }
-      setError(err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || "Failed to create product. Please check your inputs.");
+      console.error("Error updating product:", err);
+      setError(err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || "Failed to update product.");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const [jsonModalOpen, setJsonModalOpen] = useState(false);
-  const [jsonText, setJsonText] = useState('');
-  const [jsonError, setJsonError] = useState<string | null>(null);
-
-  const handleJsonImport = () => {
-    setJsonError(null);
-    try {
-      const data = JSON.parse(jsonText);
-
-      const toCommaStr = (val: any): string => {
-        if (Array.isArray(val)) return val.join(', ');
-        if (typeof val === 'string') return val;
-        return '';
-      };
-
-      setFormData(prev => ({
-        ...prev,
-        name: data.name ?? prev.name,
-        brand: data.brand ?? prev.brand,
-        fragrance_family: data.fragrance_family ?? prev.fragrance_family,
-        description: data.description ?? prev.description,
-        image_url: data.image_url ?? prev.image_url,
-        images: Array.isArray(data.images) ? data.images : prev.images,
-        stock_ml: data.stock_ml ?? prev.stock_ml,
-        sort_order: data.sort_order ?? prev.sort_order,
-        is_featured: data.is_featured ?? prev.is_featured,
-        is_new_arrival: data.is_new_arrival ?? prev.is_new_arrival,
-        is_active: data.is_active ?? prev.is_active,
-        notes_top: toCommaStr(data.notes_top) || prev.notes_top,
-        notes_middle: toCommaStr(data.notes_middle) || prev.notes_middle,
-        notes_base: toCommaStr(data.notes_base) || prev.notes_base,
-        notes_top_desc: data.notes_top_desc ?? prev.notes_top_desc,
-        notes_middle_desc: data.notes_middle_desc ?? prev.notes_middle_desc,
-        notes_base_desc: data.notes_base_desc ?? prev.notes_base_desc,
-        bottle_ids: Array.isArray(data.bottle_ids) ? data.bottle_ids : prev.bottle_ids,
-        category_ids: Array.isArray(data.category_ids) ? data.category_ids : prev.category_ids,
-      }));
-
-      if (Array.isArray(data.variants) && data.variants.length > 0) {
-        setVariants(
-          data.variants.map((v: any) => ({
-            size_ml: Number(v.size_ml) || 0,
-            price: Number(v.price) || 0,
-            is_pack: !!v.is_pack,
-            stock: Number(v.stock) || 0,
-            label: v.label || '',
-          }))
-        );
-      }
-
-      setJsonModalOpen(false);
-      setJsonText('');
-    } catch {
-      setJsonError('Invalid JSON. Please check the format and try again.');
-    }
-  };
+  if (loading) {
+    return (
+      <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="animate-spin text-indigo-600" size={40} />
+        <p className="text-slate-500 font-medium">Loading fragrance details...</p>
+      </div>
+    );
+  }
 
   if (success) {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center space-y-6 animate-in fade-in zoom-in duration-500">
-        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center shadow-lg shadow-green-100">
+        <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center shadow-lg shadow-indigo-100">
           <CheckCircle2 size={40} />
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900">Product Created!</h2>
-          <p className="text-slate-500 mt-2">The perfume has been added to your catalog successfully.</p>
+          <h2 className="text-2xl font-bold text-slate-900">Changes Saved!</h2>
+          <p className="text-slate-500 mt-2">The product has been updated successfully.</p>
         </div>
-        <p className="text-xs text-slate-400 animate-pulse">Redirecting to products list...</p>
+        <p className="text-xs text-slate-400 animate-pulse">Redirecting to catalog...</p>
       </div>
     );
   }
@@ -348,70 +305,21 @@ export default function AddProductPage() {
     <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Link href="/products" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+          <Link href="/curated-sets" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-slate-500" />
           </Link>
           <div>
             <nav className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center mb-1">
-              <Link href="/products">Products</Link>
+              <Link href="/curated-sets">Curated Sets</Link>
               <ChevronRight size={10} className="mx-2" />
-              <span className="text-indigo-600">New Product</span>
+              <span className="text-indigo-600">Edit Set</span>
             </nav>
-            <h1 className="text-2xl font-bold text-slate-900">Add New Perfume</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Update Set</h1>
           </div>
         </div>
         
-        <button
-          type="button"
-          onClick={() => setJsonModalOpen(true)}
-          className="flex items-center space-x-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors"
-        >
-          <FileJson size={16} />
-          <span>Import JSON</span>
-        </button>
+        <div />
       </div>
-
-      {jsonModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <div className="flex items-center space-x-2">
-                <FileJson size={18} className="text-indigo-600" />
-                <h3 className="font-bold text-slate-900">Import from JSON</h3>
-              </div>
-              <button type="button" onClick={() => { setJsonModalOpen(false); setJsonError(null); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
-                <X size={18} className="text-slate-400" />
-              </button>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <p className="text-xs text-slate-500">Paste your product JSON below. All matching fields will auto-fill the form.</p>
-              <textarea
-                value={jsonText}
-                onChange={(e) => { setJsonText(e.target.value); setJsonError(null); }}
-                placeholder='{ "name": "Bleu de Chanel", "brand": "Chanel", ... }'
-                rows={14}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none placeholder:text-slate-300"
-              />
-              {jsonError && (
-                <p className="text-xs text-red-600 font-medium">{jsonError}</p>
-              )}
-            </div>
-            <div className="flex items-center justify-end space-x-3 px-6 py-4 border-t border-slate-100">
-              <button type="button" onClick={() => { setJsonModalOpen(false); setJsonError(null); }} className="px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleJsonImport}
-                disabled={!jsonText.trim()}
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Import & Fill
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <div className="xl:col-span-7 space-y-6">
@@ -429,82 +337,22 @@ export default function AddProductPage() {
                   required
                   value={formData.name}
                   onChange={handleInputChange}
-                  placeholder="e.g. Aventus" 
+                  placeholder="e.g. Summer Discovery Set" 
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400" 
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Brand</label>
-                  <select 
-                    name="brand"
-                    required
-                    value={formData.brand}
-                    onChange={handleInputChange}
-                    disabled={fetchingBrands}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer disabled:opacity-50"
-                  >
-                    {fetchingBrands ? (
-                      <option>Loading brands...</option>
-                    ) : (
-                      brands.map((brand: any) => (
-                        <option key={brand._id} value={brand.name}>{brand.name}</option>
-                      ))
-                    )}
-                    {brands.length === 0 && !fetchingBrands && (
-                      <option value="">No brands found</option>
-                    )}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Fragrance Family</label>
-                  <select 
-                    name="fragrance_family"
-                    value={formData.fragrance_family}
-                    onChange={handleInputChange}
-                    disabled={fetchingFamilies}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer disabled:opacity-50"
-                  >
-                    {fetchingFamilies ? (
-                      <option>Loading fragrance families...</option>
-                    ) : (
-                      fragranceFamilies.map((fam: any) => (
-                        <option key={fam._id} value={fam.name}>{fam.name}</option>
-                      ))
-                    )}
-                    {fragranceFamilies.length === 0 && !fetchingFamilies && (
-                      <option value="">No fragrance families found</option>
-                    )}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Stock (ml)</label>
-                  <input
-                    name="stock_ml"
-                    type="number"
-                    min={0}
-                    value={formData.stock_ml}
-                    onChange={handleInputChange}
-                    placeholder="e.g. 500"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
-                  />
-                  <p className="text-[10px] text-slate-400">Total available ml for this bottle.</p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Display Order</label>
-                  <input
-                    name="sort_order"
-                    type="number"
-                    min={0}
-                    value={formData.sort_order}
-                    onChange={handleInputChange}
-                    placeholder="e.g. 1"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
-                  />
-                  <p className="text-[10px] text-slate-400">Lower numbers appear first on the site.</p>
-                </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Display Order</label>
+                <input
+                  name="sort_order"
+                  type="number"
+                  min={0}
+                  value={formData.sort_order}
+                  onChange={handleInputChange}
+                  placeholder="e.g. 1"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
+                />
+                <p className="text-[10px] text-slate-400">Lower numbers appear first on the site.</p>
               </div>
             </div>
           </section>
@@ -514,7 +362,16 @@ export default function AddProductPage() {
             <RichTextEditor 
               value={formData.description}
               onChange={(content: string) => setFormData(prev => ({ ...prev, description: content }))}
-              placeholder="Describe the fragrance notes and character..." 
+              placeholder="Describe this curated set..." 
+            />
+          </section>
+
+          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <SetItemsEditor
+              items={setItems}
+              onChange={setSetItems}
+              catalog={catalogProducts}
+              excludeProductId={productId}
             />
           </section>
 
@@ -639,7 +496,7 @@ export default function AddProductPage() {
                 <span className="w-20 text-center">Stock</span>
                 <span className="w-10" />
               </div>
-              {variants.map((variant, i) => (
+              {variants.map((variant: any, i: number) => (
                 <div key={i} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto_auto_auto] gap-3 items-center p-3 md:p-0 rounded-xl md:rounded-none border md:border-0 border-slate-100">
                   <div>
                     <label className="md:hidden text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Size</label>
@@ -686,7 +543,7 @@ export default function AddProductPage() {
                   </label>
                   <input
                     type="number"
-                    value={variant.is_pack ? variant.stock : ''}
+                    value={variant.is_pack ? (variant.stock ?? 0) : ''}
                     onChange={(e) => handleVariantChange(i, 'stock', e.target.value)}
                     placeholder={variant.is_pack ? "0" : "—"}
                     disabled={!variant.is_pack}
@@ -738,7 +595,7 @@ export default function AddProductPage() {
           {allCategories.length > 0 && (
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
             <div className="text-slate-900 font-bold">Categories</div>
-            <p className="text-xs text-slate-400">Assign this product to one or more categories. Products can belong to multiple categories.</p>
+            <p className="text-xs text-slate-400">Assign this product to one or more categories.</p>
             <div className="flex flex-wrap gap-2">
               {allCategories.filter((c: any) => c.is_active !== false).map((cat: any) => {
                 const cid = cat._id;
@@ -865,16 +722,16 @@ export default function AddProductPage() {
             <div className="text-slate-900 font-bold">Actions</div>
             {error && <div className="text-xs font-bold text-red-500 uppercase tracking-tight">{String(error)}</div>}
             <div className="flex items-center space-x-3">
-              <Link href="/products" className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
-                Cancel
+              <Link href="/curated-sets" className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
+                Discard
               </Link>
               <button 
                 type="submit"
-                disabled={loading}
+                disabled={saving}
                 className="flex-1 bg-indigo-600 text-white px-6 py-2.5 rounded-xl flex items-center justify-center space-x-2 font-bold text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50"
               >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                <span>{loading ? 'Saving...' : 'Save Product'}</span>
+                {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                <span>{saving ? 'Saving...' : 'Save Set'}</span>
               </button>
             </div>
           </section>

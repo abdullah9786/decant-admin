@@ -1,0 +1,218 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, ExternalLink, Layers } from 'lucide-react';
+import { productApi } from '@/lib/api';
+import { clsx } from 'clsx';
+
+export default function CuratedSetsList() {
+  const [sets, setSets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const fetchSets = async () => {
+    setLoading(true);
+    try {
+      const response = await productApi.getAll({
+        include_inactive: true,
+        product_type: 'set',
+      });
+      setSets(response.data || []);
+    } catch (err) {
+      console.error('Error fetching curated sets', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSets();
+  }, []);
+
+  const getId = (product: any) => product.id || product._id;
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this curated set?')) return;
+    setDeletingId(id);
+    try {
+      await productApi.delete(id);
+      setSets((prev) => prev.filter((p) => getId(p) !== id));
+    } catch (err) {
+      console.error('Error deleting set', err);
+      alert('Failed to delete curated set');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const sortedSets = [...sets].sort((a, b) => {
+    const aOrder = a.sort_order ?? 0;
+    const bOrder = b.sort_order ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bCreated - aCreated;
+  });
+
+  const filtered = sortedSets.filter((set) =>
+    set.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Curated Sets</h1>
+          <p className="text-slate-500 mt-1">
+            Manage bundled fragrance sets shown on the storefront.
+          </p>
+        </div>
+        <div className="flex space-x-3">
+          <button
+            onClick={fetchSets}
+            className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all"
+            title="Refresh"
+          >
+            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <Link
+            href="/curated-sets/add"
+            className="bg-indigo-600 text-white px-4 py-2.5 rounded-lg flex items-center space-x-2 font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+          >
+            <Plus size={18} />
+            <span>Add Set</span>
+          </Link>
+        </div>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:items-center justify-between">
+        <div className="relative w-full sm:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search sets..."
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-950 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder:text-slate-400"
+          />
+        </div>
+        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+          {filtered.length} Results
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="animate-spin text-indigo-600" size={32} />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+          <Layers className="mx-auto text-slate-300 mb-4" size={40} />
+          <p className="text-slate-500 font-medium">No curated sets found.</p>
+          <Link
+            href="/curated-sets/add"
+            className="inline-flex items-center mt-4 text-sm font-bold text-indigo-600 hover:underline"
+          >
+            <Plus size={16} className="mr-1" />
+            Create your first set
+          </Link>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/50">
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Set</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Included</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Sizes</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Order</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</th>
+                <th className="px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest text-slate-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((set) => {
+                const setId = getId(set);
+                return (
+                  <tr key={setId} className="group hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+                          {set.image_url ? (
+                            <img src={set.image_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-300">
+                              <Layers size={18} />
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{set.name}</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-tighter">
+                            ID: {(setId || '').substring(0, 8)}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600 font-medium">
+                      {(set.set_items || []).length} fragrances
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold text-indigo-600">
+                      {set.variants?.length || 0} sizes
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600 font-bold">
+                      {set.sort_order ?? 0}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={clsx(
+                          'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase',
+                          set.is_active !== false
+                            ? 'bg-green-50 text-green-600'
+                            : 'bg-slate-100 text-slate-500',
+                        )}
+                      >
+                        {set.is_active !== false ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Link
+                          href={`/curated-sets/edit/${setId}`}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                        >
+                          <Edit size={16} />
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(setId)}
+                          disabled={deletingId === setId}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                        >
+                          {deletingId === setId ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
+                        </button>
+                        <a
+                          href={`http://localhost:3000/products/${set.slug || setId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                        >
+                          <ExternalLink size={16} />
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

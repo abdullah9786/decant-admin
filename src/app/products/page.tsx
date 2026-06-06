@@ -52,7 +52,7 @@ export default function ProductList() {
     setLoading(true);
     try {
       const response = await productApi.getAll({ include_inactive: true });
-      setProducts(response.data);
+      setProducts((response.data || []).filter((p: any) => (p.product_type || 'single') !== 'set'));
     } catch (err) {
       console.error("Error fetching products", err);
     } finally {

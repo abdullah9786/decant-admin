@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { 
@@ -17,15 +17,7 @@ import {
 import { productApi, fragranceFamilyApi, categoryApi, brandApi, bottleApi, chipApi } from '@/lib/api';
 import RichTextEditor from '@/components/shared/RichTextEditor';
 import ChipPickerSection from '@/components/shared/ChipPickerSection';
-import SetItemsEditor, { type SetItemDraft } from '@/components/products/SetItemsEditor';
 import { defaultVariantButtonLabel, serializeVariantForApi } from '@/lib/productVariant';
-import {
-  createEmptySnapshot,
-  type ProductFormSnapshot,
-} from '@/lib/productFormDefaults';
-import { mapSetItemsFromApi, normalizeProductId } from '@/lib/productIds';
-
-const SET_DISPLAY_BRAND = 'Curated';
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -61,10 +53,6 @@ export default function EditProductPage() {
     chip_ids: [] as string[],
   });
 
-  const [productType, setProductType] = useState<'single' | 'set'>('single');
-  const [setItems, setSetItems] = useState<SetItemDraft[]>([]);
-  const [catalogProducts, setCatalogProducts] = useState<any[]>([]);
-
   const [allBottles, setAllBottles] = useState<any[]>([]);
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [allChips, setAllChips] = useState<any[]>([]);
@@ -88,28 +76,6 @@ export default function EditProductPage() {
   const [fetchingFamilies, setFetchingFamilies] = useState(true);
   const [brands, setBrands] = useState<any[]>([]);
   const [fetchingBrands, setFetchingBrands] = useState(true);
-  const loadedSnapshotRef = useRef<ProductFormSnapshot | null>(null);
-
-  const handleProductTypeChange = (type: 'single' | 'set') => {
-    if (type === productType) return;
-
-    const loaded = loadedSnapshotRef.current;
-    if (loaded && loaded.productType === type) {
-      setProductType(type);
-      setFormData({ ...loaded.formData });
-      setVariants(loaded.variants.map((v) => ({ ...v })));
-      setSetItems(loaded.setItems.map((item) => ({ ...item })));
-      setBasePrice100ml(loaded.basePrice100ml);
-    } else {
-      const empty = createEmptySnapshot(brands, fragranceFamilies, allBottles, type);
-      setProductType(type);
-      setFormData(empty.formData);
-      setVariants(empty.variants);
-      setSetItems(empty.setItems);
-      setBasePrice100ml(empty.basePrice100ml);
-    }
-    setError(null);
-  };
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -117,6 +83,10 @@ export default function EditProductPage() {
       try {
         const response = await productApi.getOne(productId);
         const product = response.data;
+        if (product.product_type === 'set') {
+          router.replace(`/curated-sets/edit/${productId}`);
+          return;
+        }
         setFormData({
           name: product.name,
           brand: product.brand,
@@ -139,42 +109,10 @@ export default function EditProductPage() {
           category_ids: product.category_ids || [],
           chip_ids: product.chip_ids || [],
         });
-        setProductType(product.product_type === 'set' ? 'set' : 'single');
-        const loadedSetItems = mapSetItemsFromApi(product.set_items);
-        const loadedVariants = (product.variants || []).map((v: any) => ({
+        setVariants((product.variants || []).map((v: any) => ({
           ...v,
           label: v.label || '',
-        }));
-        setSetItems(loadedSetItems);
-        setVariants(loadedVariants);
-        loadedSnapshotRef.current = {
-          productType: product.product_type === 'set' ? 'set' : 'single',
-          formData: {
-            name: product.name,
-            brand: product.brand,
-            fragrance_family: product.fragrance_family || '',
-            description: product.description,
-            image_url: product.image_url || '',
-            images: product.images || [],
-            stock_ml: product.stock_ml || 0,
-            sort_order: product.sort_order || 0,
-            is_featured: product.is_featured || false,
-            is_new_arrival: product.is_new_arrival || false,
-            is_active: product.is_active !== undefined ? product.is_active : true,
-            notes_top: (product.notes_top || []).join('\n'),
-            notes_middle: (product.notes_middle || []).join('\n'),
-            notes_base: (product.notes_base || []).join('\n'),
-            notes_top_desc: product.notes_top_desc || '',
-            notes_middle_desc: product.notes_middle_desc || '',
-            notes_base_desc: product.notes_base_desc || '',
-            bottle_ids: product.bottle_ids || [],
-            category_ids: product.category_ids || [],
-            chip_ids: product.chip_ids || [],
-          },
-          variants: loadedVariants,
-          setItems: loadedSetItems,
-          basePrice100ml: '',
-        };
+        })));
       } catch (err: any) {
         console.error("Error fetching product:", err);
         setError("Failed to load product data. It may have been deleted.");
@@ -218,11 +156,8 @@ export default function EditProductPage() {
       bottleApi.getAll({ include_inactive: true }).then(res => setAllBottles(res.data)).catch(() => {});
       categoryApi.getAll({ include_inactive: true }).then(res => setAllCategories(res.data || [])).catch(() => {});
       chipApi.getAll().then(res => setAllChips(res.data || [])).catch(() => {});
-      productApi.getAll({ include_inactive: true }).then(res => {
-        setCatalogProducts(res.data || []);
-      }).catch(() => {});
     }
-  }, [productId]);
+  }, [productId, router]);
 
   const toggleBottle = (id: string) => {
     setFormData(prev => ({
@@ -301,8 +236,9 @@ export default function EditProductPage() {
           .filter(Boolean);
       const productPayload: any = {
         ...formData,
-        product_type: productType,
-        stock_ml: productType === 'set' ? 0 : parseInt(String(formData.stock_ml || 0)),
+        product_type: 'single',
+        set_items: [],
+        stock_ml: parseInt(String(formData.stock_ml || 0)),
         sort_order: parseInt(String(formData.sort_order || 0)),
         chip_ids: formData.chip_ids,
         notes_top: splitNotes(formData.notes_top),
@@ -312,21 +248,6 @@ export default function EditProductPage() {
           .filter(v => parseFloat(String(v.price)) > 0)
           .map(serializeVariantForApi)
       };
-
-      if (productType === 'set') {
-        if (setItems.length < 2) {
-          setError('Please link at least 2 fragrances to the set.');
-          setSaving(false);
-          return;
-        }
-        productPayload.set_items = setItems
-          .map((item) => ({ product_id: normalizeProductId(item.product_id) }))
-          .filter((item) => item.product_id);
-        productPayload.brand = SET_DISPLAY_BRAND;
-        productPayload.fragrance_family = '';
-      } else {
-        productPayload.set_items = [];
-      }
 
       if (productPayload.variants.length === 0) {
         setError("Please add at least one variant with a price.");
@@ -407,9 +328,7 @@ export default function EditProductPage() {
               <ChevronRight size={10} className="mx-2" />
               <span className="text-indigo-600">Edit Product</span>
             </nav>
-            <h1 className="text-2xl font-bold text-slate-900">
-              {productType === 'set' ? 'Update Set' : 'Update Perfume'}
-            </h1>
+            <h1 className="text-2xl font-bold text-slate-900">Update Perfume</h1>
           </div>
         </div>
         
@@ -425,25 +344,6 @@ export default function EditProductPage() {
             </div>
             <div className="grid grid-cols-1 gap-5">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Product Type</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleProductTypeChange('single')}
-                    className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${productType === 'single' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'}`}
-                  >
-                    Single Fragrance
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleProductTypeChange('set')}
-                    className={`px-4 py-3 rounded-xl border text-sm font-bold transition-colors ${productType === 'set' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600'}`}
-                  >
-                    Curated Set
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Product Name</label>
                 <input 
                   name="name"
@@ -455,7 +355,6 @@ export default function EditProductPage() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400" 
                 />
               </div>
-              {productType === 'single' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Brand</label>
@@ -501,8 +400,6 @@ export default function EditProductPage() {
                   </select>
                 </div>
               </div>
-              )}
-              {productType === 'single' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Stock (ml)</label>
@@ -531,20 +428,6 @@ export default function EditProductPage() {
                   <p className="text-[10px] text-slate-400">Lower numbers appear first on the site.</p>
                 </div>
               </div>
-              ) : (
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Display Order</label>
-                <input
-                  name="sort_order"
-                  type="number"
-                  min={0}
-                  value={formData.sort_order}
-                  onChange={handleInputChange}
-                  placeholder="e.g. 1"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-950 font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-slate-400"
-                />
-              </div>
-              )}
             </div>
           </section>
 
@@ -553,20 +436,9 @@ export default function EditProductPage() {
             <RichTextEditor 
               value={formData.description}
               onChange={(content: string) => setFormData(prev => ({ ...prev, description: content }))}
-              placeholder={productType === 'set' ? 'Describe this curated set...' : 'Describe the fragrance notes and character...'} 
+              placeholder="Describe the fragrance notes and character..." 
             />
           </section>
-
-          {productType === 'set' && (
-          <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <SetItemsEditor
-              items={setItems}
-              onChange={setSetItems}
-              catalog={catalogProducts}
-              excludeProductId={productId}
-            />
-          </section>
-          )}
 
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div>
