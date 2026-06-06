@@ -35,19 +35,34 @@ export default function SetItemsEditor({
     return ids;
   }, [items]);
 
-  const singles = useMemo(
-    () =>
-      (catalog || []).filter((p) => {
-        const pid = getProductId(p);
-        if (excludeProductId && pid === normalizeProductId(excludeProductId)) {
-          return false;
-        }
-        if ((p.product_type || "single") === "set") return false;
-        if (selectedIdSet.has(pid)) return true;
-        return p.is_active !== false;
-      }),
-    [catalog, excludeProductId, selectedIdSet],
-  );
+  const singles = useMemo(() => {
+    const fromCatalog = (catalog || []).filter((p) => {
+      const pid = getProductId(p);
+      if (excludeProductId && pid === normalizeProductId(excludeProductId)) {
+        return false;
+      }
+      if ((p.product_type || "single") === "set") return false;
+      if (selectedIdSet.has(pid)) return true;
+      return p.is_active !== false;
+    });
+
+    const catalogIds = new Set(fromCatalog.map((p) => getProductId(p)));
+    const missingSelected = items
+      .map((item) => {
+        const pid = normalizeProductId(item.product_id);
+        if (!pid || catalogIds.has(pid)) return null;
+        return {
+          _id: pid,
+          name: item.name || "Unknown fragrance",
+          brand: item.brand || "",
+          is_active: false,
+          product_type: "single",
+        };
+      })
+      .filter(Boolean) as any[];
+
+    return [...missingSelected, ...fromCatalog];
+  }, [catalog, excludeProductId, items, selectedIdSet]);
 
   const filteredProducts = useMemo(
     () =>
