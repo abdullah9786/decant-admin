@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, ExternalLink, Layers } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Loader2, RefreshCw, ExternalLink, Layers, GripVertical } from 'lucide-react';
 import { productApi } from '@/lib/api';
 import { clsx } from 'clsx';
 
@@ -11,6 +11,8 @@ export default function CuratedSetsList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const fetchSets = async () => {
     setLoading(true);
@@ -60,6 +62,43 @@ export default function CuratedSetsList() {
     set.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
+  const handleDrop = async (targetId: string) => {
+    if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
+    const current = [...sortedSets];
+    const fromIndex = current.findIndex((s) => getId(s) === draggingId);
+    const toIndex = current.findIndex((s) => getId(s) === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const prevOrderMap = new Map(current.map((s) => [getId(s), s.sort_order ?? 0]));
+    const moved = current.splice(fromIndex, 1)[0];
+    current.splice(toIndex, 0, moved);
+
+    const updated = current.map((s, idx) => ({ ...s, sort_order: idx + 1 }));
+    setSets((prev) =>
+      prev.map((s) => {
+        const found = updated.find((u) => getId(u) === getId(s));
+        return found ? { ...s, sort_order: found.sort_order } : s;
+      }),
+    );
+
+    const changed = updated.filter((s) => prevOrderMap.get(getId(s)) !== s.sort_order);
+    if (changed.length === 0) return;
+
+    setSavingOrder(true);
+    try {
+      await Promise.all(
+        changed.map((s) => productApi.update(getId(s), { sort_order: s.sort_order })),
+      );
+    } catch (err) {
+      console.error('Error updating set order', err);
+      alert('Failed to save order. Please try again.');
+      fetchSets();
+    } finally {
+      setSavingOrder(false);
+      setDraggingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
@@ -67,6 +106,11 @@ export default function CuratedSetsList() {
           <h1 className="text-2xl font-bold text-slate-900">Curated Sets</h1>
           <p className="text-slate-500 mt-1">
             Manage bundled fragrance sets shown on the storefront.
+          </p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
+            Drag rows to reorder
+            {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {savingOrder ? ' • saving…' : ''}
           </p>
         </div>
         <div className="flex space-x-3">
@@ -124,6 +168,7 @@ export default function CuratedSetsList() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
+                <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Move</th>
                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Set</th>
                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Included</th>
                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Sizes</th>
@@ -135,8 +180,30 @@ export default function CuratedSetsList() {
             <tbody className="divide-y divide-slate-100">
               {filtered.map((set) => {
                 const setId = getId(set);
+                const dragEnabled = searchTerm.trim().length === 0;
                 return (
-                  <tr key={setId} className="group hover:bg-slate-50/50 transition-colors">
+                  <tr
+                    key={setId}
+                    draggable={dragEnabled}
+                    onDragStart={() => dragEnabled && setDraggingId(setId)}
+                    onDragOver={(e) => {
+                      if (dragEnabled) e.preventDefault();
+                    }}
+                    onDrop={() => handleDrop(setId)}
+                    className={clsx(
+                      'group hover:bg-slate-50/50 transition-colors',
+                      draggingId === setId && 'bg-indigo-50/60',
+                    )}
+                  >
+                    <td className="px-4 py-4 text-slate-400">
+                      <GripVertical
+                        size={16}
+                        className={clsx(
+                          'cursor-grab',
+                          !dragEnabled && 'opacity-40 cursor-not-allowed',
+                        )}
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
