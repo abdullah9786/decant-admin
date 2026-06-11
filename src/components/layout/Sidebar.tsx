@@ -71,8 +71,8 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="w-64 bg-white h-screen fixed left-0 top-0 border-r border-slate-200 flex flex-col z-50">
-      <div className="h-16 flex items-center px-6 border-b border-slate-100 italic">
+    <aside className="w-64 bg-white h-screen fixed left-0 top-0 border-r border-slate-200 flex flex-col z-50 min-h-0">
+      <div className="h-16 flex-shrink-0 flex items-center px-6 border-b border-slate-100 italic">
         <Link href="/" className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-100">
             <span className="text-white font-bold">D</span>
@@ -81,7 +81,7 @@ const Sidebar = () => {
         </Link>
       </div>
 
-      <nav className="flex-1 py-6 px-4 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-6 px-4 space-y-1">
         {navItems.map((item) => {
           const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           return (
@@ -105,7 +105,7 @@ const Sidebar = () => {
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-100">
+      <div className="flex-shrink-0 p-4 border-t border-slate-100 bg-white">
         <Link 
           href="/settings"
           className={cn(
