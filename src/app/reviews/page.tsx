@@ -65,6 +65,7 @@ export default function ReviewsPage() {
   } | null>(null);
 
   const [confirm, setConfirm] = useState<ConfirmDialogConfig | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const [toast, setToast] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
   const productNameById = useMemo(() => {
@@ -187,6 +188,18 @@ export default function ReviewsPage() {
         setToast({ kind: "success", message: "Review deleted." });
       },
     });
+  };
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    const cfg = confirm;
+    setConfirmLoading(true);
+    try {
+      await cfg.run();
+    } finally {
+      setConfirmLoading(false);
+      setConfirm(null);
+    }
   };
 
   return (
@@ -419,7 +432,12 @@ export default function ReviewsPage() {
         </div>
       )}
 
-      <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
+      <ConfirmDialog
+        config={confirm}
+        loading={confirmLoading}
+        onCancel={() => setConfirm(null)}
+        onConfirm={runConfirm}
+      />
     </div>
   );
 }
