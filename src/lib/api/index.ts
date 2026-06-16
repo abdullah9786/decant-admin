@@ -173,6 +173,14 @@ export const chipApi = {
     delete: (id: string) => api.delete(`/chips/${id}`),
 };
 
+export const reviewApi = {
+    getAll: (params?: { product_id?: string; source?: string; skip?: number; limit?: number }) =>
+        api.get('/reviews/admin', { params }),
+    bulkCreate: (reviews: any[]) => api.post('/reviews/admin/bulk', { reviews }),
+    update: (id: string, data: any) => api.patch(`/reviews/${id}`, data),
+    delete: (id: string) => api.delete(`/reviews/${id}`),
+};
+
 export const influencerAdminApi = {
     getAll: () => api.get('/influencers/admin/all'),
     create: (data: any) => api.post('/influencers/create', data),
