@@ -173,6 +173,20 @@ export const chipApi = {
     delete: (id: string) => api.delete(`/chips/${id}`),
 };
 
+export const blogApi = {
+    listPending: () => api.get('/blog/admin/queue'),
+    listAll: (params?: { skip?: number; limit?: number }) =>
+        api.get('/blog/admin/all', { params }),
+    adminGet: (id: string) => api.get(`/blog/admin/${id}`),
+    adminCreate: (data: Record<string, unknown>) => api.post('/blog/admin', data),
+    adminUpdate: (id: string, data: Record<string, unknown>) => api.put(`/blog/admin/${id}`, data),
+    adminDelete: (id: string) => api.delete(`/blog/admin/${id}`),
+    adminBulkDelete: (postIds: string[]) =>
+        api.post('/blog/admin/bulk-delete', { post_ids: postIds }),
+    approve: (id: string) => api.post(`/blog/admin/${id}/approve`),
+    reject: (id: string, reason: string) => api.post(`/blog/admin/${id}/reject`, { reason }),
+};
+
 export const reviewApi = {
     getAll: (params?: { product_id?: string; source?: string; skip?: number; limit?: number }) =>
         api.get('/reviews/admin', { params }),

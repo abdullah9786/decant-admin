@@ -1,0 +1,65 @@
+/* Editor.js (Codex) holder chrome — core UI styles ship with the library. */
+.blog-post-editor-holder {
+  min-height: 240px;
+}
+
+.blog-post-editor-holder .codex-editor {
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background: rgb(255 255 255);
+}
+
+/*
+ * Tailwind preflight resets heading tags to inherit size/weight; @editorjs/header
+ * renders real <h1>–<h6 class="ce-header">, so we restore visible hierarchy here.
+ */
+.blog-post-editor-holder h1.ce-header {
+  font-size: 2rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.blog-post-editor-holder h2.ce-header {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.blog-post-editor-holder h3.ce-header {
+  font-size: 1.25rem;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.blog-post-editor-holder h4.ce-header {
+  font-size: 1.125rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.blog-post-editor-holder h5.ce-header,
+.blog-post-editor-holder h6.ce-header {
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.blog-post-editor-holder .tc-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.blog-post-editor-holder .ce-paragraph a,
+.blog-post-editor-holder .ce-header a,
+.blog-post-editor-holder .cdx-quote a {
+  color: rgb(4 120 87);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.blog-post-editor-holder .ce-paragraph a:hover,
+.blog-post-editor-holder .ce-header a:hover,
+.blog-post-editor-holder .cdx-quote a:hover {
+  color: rgb(6 95 70);
+}
