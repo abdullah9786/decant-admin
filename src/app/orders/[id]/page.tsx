@@ -608,6 +608,45 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
+          {/* Mystery Gift (offline fulfillment) */}
+          {order.mystery_gift && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div
+                className="px-6 py-4 flex items-center gap-2 text-white"
+                style={{ background: order.mystery_gift.accent_color || '#7c3aed' }}
+              >
+                <Gift size={16} />
+                <h3 className="text-sm font-bold">Mystery Gift Unlocked</h3>
+              </div>
+              <div className="p-6 space-y-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Tier</p>
+                  <p className="text-lg font-bold text-slate-900">{order.mystery_gift.name || 'Mystery Gift'}</p>
+                  {order.mystery_gift.tagline && (
+                    <p className="text-xs text-slate-500 mt-0.5">{order.mystery_gift.tagline}</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {order.mystery_gift.min_subtotal != null && (
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Unlock Threshold</p>
+                      <p className="text-sm font-bold text-slate-700">₹{Number(order.mystery_gift.min_subtotal).toLocaleString('en-IN')}</p>
+                    </div>
+                  )}
+                  {order.mystery_gift.subtotal_at_unlock != null && (
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Cart Subtotal</p>
+                      <p className="text-sm font-bold text-slate-700">₹{Number(order.mystery_gift.subtotal_at_unlock).toLocaleString('en-IN')}</p>
+                    </div>
+                  )}
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[11px] text-amber-800">
+                  Include this tier's mystery gift when packing the order.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Referral / Coupon */}
           {(order.influencer_id || order.coupon_code || order.referral_code) && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

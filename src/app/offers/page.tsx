@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, Search, Trash2, Edit2, Loader2, Percent, AlertCircle,
-  CheckCircle2, X, Calendar, Clock,
+  CheckCircle2, X, Calendar, Clock, Gift, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { offerApi, productApi } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -57,7 +57,34 @@ function getOfferState(o: any): OfferState {
 const OFFER_TYPES = [
   { value: 'free_decant', label: 'Free Decant' },
   { value: 'daily_deal', label: 'Daily Deal' },
+  { value: 'mystery_gift', label: 'Mystery Gift' },
 ];
+
+// Curated icon set the storefront ladder knows how to render. Stored as a
+// plain string key on each tier so the value stays JSON-friendly.
+const MYSTERY_TIER_ICONS = ['gift', 'sparkles', 'crown', 'gem', 'star', 'award', 'trophy'];
+
+interface MysteryTier {
+  id: string;
+  name: string;
+  min_subtotal: number;
+  accent_color: string;
+  icon: string;
+  tagline: string;
+}
+
+const newTierId = () =>
+  `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+const makeTier = (overrides: Partial<MysteryTier> = {}): MysteryTier => ({
+  id: newTierId(),
+  name: '',
+  min_subtotal: 2000,
+  accent_color: '#7c3aed',
+  icon: 'gift',
+  tagline: '',
+  ...overrides,
+});
 
 const QUALIFYING_TYPES = [
   { value: 'decant', label: 'Decants Only' },
@@ -85,6 +112,8 @@ const defaultConfig = {
   product_ids: [] as string[],
   discount_percent: 50,
   apply_to: 'all',
+  // mystery_gift
+  tiers: [] as MysteryTier[],
 };
 
 const defaultDisplay = {
@@ -100,6 +129,9 @@ const defaultDisplay = {
   cta_href: '/deals/today',
   accent_color: '#dc2626',
   hero_image: '',
+  // mystery_gift
+  title_gift: 'Unlock a Mystery Gift',
+  locked_prompt: 'Spend {remaining} more to unlock {next}',
 };
 
 interface OfferForm {
@@ -193,6 +225,17 @@ export default function OfferManagement() {
         product_ids: cfg.product_ids || [],
         discount_percent: cfg.discount_percent ?? 50,
         apply_to: cfg.apply_to ?? 'all',
+        // mystery_gift slice
+        tiers: Array.isArray(cfg.tiers)
+          ? cfg.tiers.map((t: any) => makeTier({
+              id: t.id || newTierId(),
+              name: t.name || '',
+              min_subtotal: Number(t.min_subtotal) || 0,
+              accent_color: t.accent_color || '#7c3aed',
+              icon: t.icon || 'gift',
+              tagline: t.tagline || '',
+            }))
+          : [],
       },
       display: {
         // free_decant slice
@@ -207,6 +250,9 @@ export default function OfferManagement() {
         cta_href: dsp.cta_href || '/deals/today',
         accent_color: dsp.accent_color || '#dc2626',
         hero_image: dsp.hero_image || '',
+        // mystery_gift slice
+        title_gift: dsp.title_gift || 'Unlock a Mystery Gift',
+        locked_prompt: dsp.locked_prompt || 'Spend {remaining} more to unlock {next}',
       },
     });
     setProductSearch('');
@@ -267,6 +313,54 @@ export default function OfferManagement() {
   // eligible_product_ids and product_ids based on form.type.
   const selectedProductIds: string[] = (form.config as any)[productIdsField(form.type)] || [];
 
+  const addTier = () => {
+    setForm(prev => {
+      const tiers = prev.config.tiers || [];
+      const last = tiers[tiers.length - 1];
+      return {
+        ...prev,
+        config: {
+          ...prev.config,
+          tiers: [
+            ...tiers,
+            makeTier({ min_subtotal: last ? Number(last.min_subtotal) + 1500 : 2000 }),
+          ],
+        },
+      };
+    });
+  };
+
+  const updateTier = (id: string, patch: Partial<MysteryTier>) => {
+    setForm(prev => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        tiers: (prev.config.tiers || []).map(t => (t.id === id ? { ...t, ...patch } : t)),
+      },
+    }));
+  };
+
+  const removeTier = (id: string) => {
+    setForm(prev => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        tiers: (prev.config.tiers || []).filter(t => t.id !== id),
+      },
+    }));
+  };
+
+  const moveTier = (id: string, dir: -1 | 1) => {
+    setForm(prev => {
+      const tiers = [...(prev.config.tiers || [])];
+      const idx = tiers.findIndex(t => t.id === id);
+      const swap = idx + dir;
+      if (idx === -1 || swap < 0 || swap >= tiers.length) return prev;
+      [tiers[idx], tiers[swap]] = [tiers[swap], tiers[idx]];
+      return { ...prev, config: { ...prev.config, tiers } };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalLoading(true);
@@ -276,6 +370,24 @@ export default function OfferManagement() {
       const en = new Date(form.ends_at).getTime();
       if (en <= s) {
         setModalError('End date must be after start date.');
+        setModalLoading(false);
+        return;
+      }
+    }
+    if (form.type === 'mystery_gift') {
+      const tiers = form.config.tiers || [];
+      if (tiers.length === 0) {
+        setModalError('Add at least one mystery gift tier.');
+        setModalLoading(false);
+        return;
+      }
+      if (tiers.some(t => !t.name.trim())) {
+        setModalError('Every tier needs a name.');
+        setModalLoading(false);
+        return;
+      }
+      if (tiers.some(t => !t.min_subtotal || t.min_subtotal <= 0)) {
+        setModalError('Every tier needs an unlock amount greater than 0.');
         setModalLoading(false);
         return;
       }
@@ -409,6 +521,21 @@ export default function OfferManagement() {
                             {cfg.apply_to === 'decant' ? 'Decant variants' : cfg.apply_to === 'pack' ? 'Sealed packs' : 'All variants'}
                           </span>
                         </div>
+                      ) : offer.type === 'mystery_gift' ? (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-[10px] uppercase tracking-widest text-slate-400">
+                          {(cfg.tiers || []).length === 0 ? (
+                            <span className="text-amber-500">No tiers configured</span>
+                          ) : (
+                            [...(cfg.tiers || [])]
+                              .sort((a: any, b: any) => (a.min_subtotal || 0) - (b.min_subtotal || 0))
+                              .map((t: any) => (
+                                <span key={t.id} className="flex items-center gap-1">
+                                  <span className="w-2 h-2 rounded-full" style={{ background: t.accent_color || '#7c3aed' }} />
+                                  {t.name || 'Tier'} · ₹{t.min_subtotal}
+                                </span>
+                              ))
+                          )}
+                        </div>
                       ) : (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[10px] uppercase tracking-widest text-slate-400">
                           <span>Min {cfg.min_qualifying_ml || 10}ml</span>
@@ -419,9 +546,15 @@ export default function OfferManagement() {
                           </span>
                         </div>
                       )}
-                      <p className="text-[10px] uppercase tracking-widest text-indigo-500 font-bold mt-1">
-                        {eligibleCount} {offer.type === 'daily_deal' ? 'Deal' : 'Eligible'} Products
-                      </p>
+                      {offer.type === 'mystery_gift' ? (
+                        <p className="text-[10px] uppercase tracking-widest text-indigo-500 font-bold mt-1">
+                          {(cfg.tiers || []).length} Tier{(cfg.tiers || []).length === 1 ? '' : 's'}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] uppercase tracking-widest text-indigo-500 font-bold mt-1">
+                          {eligibleCount} {offer.type === 'daily_deal' ? 'Deal' : 'Eligible'} Products
+                        </p>
+                      )}
                       {(offer.starts_at || offer.ends_at) && (
                         <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
                           <Calendar size={10} />
@@ -798,6 +931,155 @@ export default function OfferManagement() {
                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
                           />
                         </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {form.type === 'mystery_gift' && (
+                  <>
+                    <div className="border-t border-slate-100 pt-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-slate-900 font-bold flex items-center gap-2">
+                          <Gift size={16} className="text-indigo-600" /> Mystery Gift Tiers
+                        </p>
+                        <button
+                          type="button"
+                          onClick={addTier}
+                          className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Add Tier
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Customers unlock the highest tier their cart subtotal reaches. Gifts are fulfilled offline.
+                      </p>
+
+                      {(form.config.tiers || []).length === 0 && (
+                        <div className="py-8 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
+                          No tiers yet. Add your first milestone.
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        {(form.config.tiers || []).map((tier, idx) => (
+                          <div
+                            key={tier.id}
+                            className="rounded-xl border border-slate-200 p-4 space-y-3 relative"
+                            style={{ borderLeft: `4px solid ${tier.accent_color || '#7c3aed'}` }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                Tier {idx + 1}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button type="button" onClick={() => moveTier(tier.id, -1)} disabled={idx === 0}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-30 disabled:cursor-not-allowed">
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button type="button" onClick={() => moveTier(tier.id, 1)} disabled={idx === (form.config.tiers || []).length - 1}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-30 disabled:cursor-not-allowed">
+                                  <ArrowDown size={14} />
+                                </button>
+                                <button type="button" onClick={() => removeTier(tier.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Tier Name</label>
+                                <input
+                                  type="text"
+                                  value={tier.name}
+                                  onChange={e => updateTier(tier.id, { name: e.target.value })}
+                                  placeholder="e.g. Mystery Deluxe"
+                                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Unlock At (₹)</label>
+                                <input
+                                  type="number" min={1}
+                                  value={tier.min_subtotal}
+                                  onChange={e => updateTier(tier.id, { min_subtotal: parseInt(e.target.value || '0') })}
+                                  placeholder="2000"
+                                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Icon</label>
+                                <select
+                                  value={tier.icon}
+                                  onChange={e => updateTier(tier.id, { icon: e.target.value })}
+                                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none capitalize"
+                                >
+                                  {MYSTERY_TIER_ICONS.map(ic => (
+                                    <option key={ic} value={ic}>{ic}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Accent Color</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={tier.accent_color}
+                                    onChange={e => updateTier(tier.id, { accent_color: e.target.value })}
+                                    className="w-12 h-[46px] rounded-lg border border-slate-200 bg-slate-50 cursor-pointer"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={tier.accent_color}
+                                    onChange={e => updateTier(tier.id, { accent_color: e.target.value })}
+                                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none font-mono"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Tagline</label>
+                              <input
+                                type="text"
+                                value={tier.tagline}
+                                onChange={e => updateTier(tier.id, { tagline: e.target.value })}
+                                placeholder="e.g. Our most-loved picks"
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 border-t border-slate-100 pt-6">
+                      <p className="text-slate-900 font-bold">Display Texts</p>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Section Title</label>
+                        <input
+                          type="text"
+                          value={form.display.title_gift}
+                          onChange={e => setForm({ ...form, display: { ...form.display, title_gift: e.target.value } })}
+                          placeholder="Unlock a Mystery Gift"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Locked Prompt</label>
+                        <input
+                          type="text"
+                          value={form.display.locked_prompt}
+                          onChange={e => setForm({ ...form, display: { ...form.display, locked_prompt: e.target.value } })}
+                          placeholder="Spend {remaining} more to unlock {next}"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                        />
+                        <p className="text-[10px] text-slate-400">Use {'{remaining}'} for the amount left and {'{next}'} for the next tier name.</p>
                       </div>
                     </div>
                   </>
