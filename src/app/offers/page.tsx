@@ -132,6 +132,7 @@ const defaultDisplay = {
   // mystery_gift
   title_gift: 'Unlock a Mystery Gift',
   locked_prompt: 'Spend {remaining} more to unlock {next}',
+  box_color: '#7c3aed',
 };
 
 interface OfferForm {
@@ -253,6 +254,7 @@ export default function OfferManagement() {
         // mystery_gift slice
         title_gift: dsp.title_gift || 'Unlock a Mystery Gift',
         locked_prompt: dsp.locked_prompt || 'Spend {remaining} more to unlock {next}',
+        box_color: dsp.box_color || '#7c3aed',
       },
     });
     setProductSearch('');
@@ -1080,6 +1082,25 @@ export default function OfferManagement() {
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
                         />
                         <p className="text-[10px] text-slate-400">Use {'{remaining}'} for the amount left and {'{next}'} for the next tier name.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Mystery Box Color</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={form.display.box_color}
+                            onChange={e => setForm({ ...form, display: { ...form.display, box_color: e.target.value } })}
+                            className="w-12 h-[46px] rounded-lg border border-slate-200 bg-slate-50 cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={form.display.box_color}
+                            onChange={e => setForm({ ...form, display: { ...form.display, box_color: e.target.value } })}
+                            placeholder="#7c3aed"
+                            className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none font-mono"
+                          />
+                        </div>
+                        <p className="text-[10px] text-slate-400">Color of the animated mystery box on the homepage section (independent of tier colors).</p>
                       </div>
                     </div>
                   </>
