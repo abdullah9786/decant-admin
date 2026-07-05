@@ -191,6 +191,10 @@ export const reviewApi = {
     getAll: (params?: { product_id?: string; source?: string; skip?: number; limit?: number }) =>
         api.get('/reviews/admin', { params }),
     bulkCreate: (reviews: any[]) => api.post('/reviews/admin/bulk', { reviews }),
+    bulkPublish: (reviewIds: string[], isPublished: boolean) =>
+        api.patch('/reviews/admin/bulk-publish', { review_ids: reviewIds, is_published: isPublished }),
+    bulkDelete: (reviewIds: string[]) =>
+        api.post('/reviews/admin/bulk-delete', { review_ids: reviewIds }),
     update: (id: string, data: any) => api.patch(`/reviews/${id}`, data),
     delete: (id: string) => api.delete(`/reviews/${id}`),
 };

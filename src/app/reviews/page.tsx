@@ -13,6 +13,7 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  Pencil,
 } from "lucide-react";
 import { productApi, reviewApi } from "@/lib/api";
 import ConfirmDialog, { ConfirmDialogConfig } from "@/components/shared/ConfirmDialog";
@@ -48,6 +49,22 @@ function formatDate(value: string) {
   }
 }
 
+type EditReviewForm = {
+  user_name: string;
+  rating: number;
+  comment: string;
+  is_published: boolean;
+};
+
+function reviewToEditForm(review: any): EditReviewForm {
+  return {
+    user_name: review.user_name || "",
+    rating: Number(review.rating) || 5,
+    comment: review.comment || "",
+    is_published: review.is_published !== false,
+  };
+}
+
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -58,7 +75,7 @@ export default function ReviewsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkError, setBulkError] = useState<string | null>(null);
-  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkImportLoading, setBulkImportLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState<{
     created_count: number;
     failed: { index: number; error: string }[];
@@ -67,6 +84,14 @@ export default function ReviewsPage() {
   const [confirm, setConfirm] = useState<ConfirmDialogConfig | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [toast, setToast] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const [editingReview, setEditingReview] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<EditReviewForm | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const productNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -85,6 +110,7 @@ export default function ReviewsPage() {
       ]);
       setReviews(reviewsRes.data || []);
       setProducts(productsRes.data || []);
+      setSelectedIds(new Set());
     } catch (err) {
       console.error("Failed to load reviews", err);
       setToast({ kind: "error", message: "Failed to load reviews." });
@@ -118,6 +144,95 @@ export default function ReviewsPage() {
     });
   }, [reviews, searchTerm, sourceFilter, productNameById]);
 
+  const allFilteredSelected =
+    filteredReviews.length > 0 &&
+    filteredReviews.every((review) => selectedIds.has(getReviewId(review)));
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const review of filteredReviews) {
+          next.delete(getReviewId(review));
+        }
+        return next;
+      });
+      return;
+    }
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const review of filteredReviews) {
+        next.add(getReviewId(review));
+      }
+      return next;
+    });
+  };
+
+  const runBulkPublish = async (isPublished: boolean) => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkLoading(true);
+    try {
+      await reviewApi.bulkPublish(ids, isPublished);
+      setReviews((prev) =>
+        prev.map((r) =>
+          selectedIds.has(getReviewId(r)) ? { ...r, is_published: isPublished } : r,
+        ),
+      );
+      setSelectedIds(new Set());
+      setToast({
+        kind: "success",
+        message: isPublished
+          ? `Published ${ids.length} review(s).`
+          : `Hidden ${ids.length} review(s).`,
+      });
+    } catch (err: any) {
+      setToast({
+        kind: "error",
+        message: err?.response?.data?.detail || "Bulk update failed.",
+      });
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const confirmBulkDelete = () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setConfirm({
+      title: "Delete selected reviews",
+      message: `Remove ${ids.length} review(s)? This cannot be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+      run: async () => {
+        setBulkLoading(true);
+        try {
+          await reviewApi.bulkDelete(ids);
+          setReviews((prev) => prev.filter((r) => !selectedIds.has(getReviewId(r))));
+          setSelectedIds(new Set());
+          setToast({ kind: "success", message: `Deleted ${ids.length} review(s).` });
+        } catch (err: any) {
+          setToast({
+            kind: "error",
+            message: err?.response?.data?.detail || "Bulk delete failed.",
+          });
+          throw err;
+        } finally {
+          setBulkLoading(false);
+        }
+      },
+    });
+  };
+
   const handleBulkImport = async () => {
     setBulkError(null);
     setBulkResult(null);
@@ -132,7 +247,7 @@ export default function ReviewsPage() {
       return;
     }
 
-    setBulkLoading(true);
+    setBulkImportLoading(true);
     try {
       const res = await reviewApi.bulkCreate(parsed);
       setBulkResult(res.data);
@@ -150,7 +265,7 @@ export default function ReviewsPage() {
     } catch (err: any) {
       setBulkError(err?.response?.data?.detail || "Bulk import failed.");
     } finally {
-      setBulkLoading(false);
+      setBulkImportLoading(false);
     }
   };
 
@@ -188,6 +303,59 @@ export default function ReviewsPage() {
         setToast({ kind: "success", message: "Review deleted." });
       },
     });
+  };
+
+  const openEditReview = (review: any) => {
+    setEditingReview(review);
+    setEditForm(reviewToEditForm(review));
+    setEditError(null);
+  };
+
+  const closeEditReview = () => {
+    setEditingReview(null);
+    setEditForm(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingReview || !editForm) return;
+
+    const user_name = editForm.user_name.trim();
+    const comment = editForm.comment.trim();
+    if (!user_name) {
+      setEditError("Reviewer name is required.");
+      return;
+    }
+    if (!comment) {
+      setEditError("Comment is required.");
+      return;
+    }
+    if (editForm.rating < 1 || editForm.rating > 5) {
+      setEditError("Rating must be between 1 and 5.");
+      return;
+    }
+
+    const id = getReviewId(editingReview);
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const res = await reviewApi.update(id, {
+        user_name,
+        rating: editForm.rating,
+        comment,
+        is_published: editForm.is_published,
+      });
+      const updated = res.data;
+      setReviews((prev) =>
+        prev.map((r) => (getReviewId(r) === id ? { ...r, ...updated } : r)),
+      );
+      setToast({ kind: "success", message: "Review updated." });
+      closeEditReview();
+    } catch (err: any) {
+      setEditError(err?.response?.data?.detail || "Failed to update review.");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const runConfirm = async () => {
@@ -260,6 +428,41 @@ export default function ReviewsPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-slate-200 bg-slate-50">
+            <span className="text-sm text-slate-600 mr-1">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              disabled={bulkLoading}
+              onClick={() => void runBulkPublish(false)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              <EyeOff size={14} />
+              Hide
+            </button>
+            <button
+              type="button"
+              disabled={bulkLoading}
+              onClick={() => void runBulkPublish(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              <Eye size={14} />
+              Publish
+            </button>
+            <button
+              type="button"
+              disabled={bulkLoading}
+              onClick={confirmBulkDelete}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
+            {bulkLoading && <Loader2 size={16} className="animate-spin text-slate-400" />}
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-20 text-slate-500">
             <Loader2 className="animate-spin mr-2" size={20} />
@@ -275,6 +478,16 @@ export default function ReviewsPage() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <th className="w-10 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllFiltered}
+                      disabled={bulkLoading}
+                      aria-label="Select all reviews on this page"
+                      className="rounded border-slate-300"
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Product</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Reviewer</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Rating</th>
@@ -287,8 +500,22 @@ export default function ReviewsPage() {
               <tbody>
                 {filteredReviews.map((review) => {
                   const id = getReviewId(review);
+                  const isSelected = selectedIds.has(id);
                   return (
-                    <tr key={id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                    <tr
+                      key={id}
+                      className={`border-b border-slate-100 hover:bg-slate-50/60 ${isSelected ? "bg-indigo-50/40" : ""}`}
+                    >
+                      <td className="px-4 py-3 align-top">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(id)}
+                          disabled={bulkLoading}
+                          aria-label={`Select review by ${review.user_name}`}
+                          className="rounded border-slate-300"
+                        />
+                      </td>
                       <td className="px-4 py-3 align-top">
                         <div className="font-medium text-slate-900 max-w-[180px] truncate">
                           {productNameById.get(review.product_id) || "Unknown product"}
@@ -329,8 +556,18 @@ export default function ReviewsPage() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
+                            onClick={() => openEditReview(review)}
+                            disabled={bulkLoading}
+                            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 disabled:opacity-50"
+                            title="Edit review"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => togglePublished(review)}
-                            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600"
+                            disabled={bulkLoading}
+                            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 disabled:opacity-50"
                             title={review.is_published ? "Hide review" : "Publish review"}
                           >
                             {review.is_published ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -338,7 +575,8 @@ export default function ReviewsPage() {
                           <button
                             type="button"
                             onClick={() => deleteReview(review)}
-                            className="p-2 rounded-lg border border-red-100 hover:bg-red-50 text-red-600"
+                            disabled={bulkLoading}
+                            className="p-2 rounded-lg border border-red-100 hover:bg-red-50 text-red-600 disabled:opacity-50"
                             title="Delete review"
                           >
                             <Trash2 size={16} />
@@ -421,11 +659,116 @@ export default function ReviewsPage() {
               <button
                 type="button"
                 onClick={handleBulkImport}
-                disabled={bulkLoading || !bulkText.trim()}
+                disabled={bulkImportLoading || !bulkText.trim()}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
               >
-                {bulkLoading && <Loader2 size={16} className="animate-spin" />}
+                {bulkImportLoading && <Loader2 size={16} className="animate-spin" />}
                 Import reviews
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingReview && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Edit review</h2>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {productNameById.get(editingReview.product_id) || "Unknown product"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditReview}
+                disabled={editSaving}
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
+                  Reviewer name
+                </label>
+                <input
+                  value={editForm.user_name}
+                  onChange={(e) =>
+                    setEditForm((prev) => prev && { ...prev, user_name: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
+                  Rating
+                </label>
+                <select
+                  value={editForm.rating}
+                  onChange={(e) =>
+                    setEditForm((prev) => prev && { ...prev, rating: Number(e.target.value) })
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                >
+                  {[5, 4, 3, 2, 1].map((n) => (
+                    <option key={n} value={n}>
+                      {n} star{n !== 1 ? "s" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
+                  Comment
+                </label>
+                <textarea
+                  value={editForm.comment}
+                  onChange={(e) =>
+                    setEditForm((prev) => prev && { ...prev, comment: e.target.value })
+                  }
+                  rows={5}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 resize-y"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.is_published}
+                  onChange={(e) =>
+                    setEditForm((prev) => prev && { ...prev, is_published: e.target.checked })
+                  }
+                  className="rounded border-slate-300"
+                />
+                Published (visible on storefront)
+              </label>
+              {editingReview.source === "customer" && (
+                <p className="text-xs text-slate-500">
+                  Customer review · verified purchase:{" "}
+                  {editingReview.is_verified_purchase ? "Yes" : "No"}
+                </p>
+              )}
+              {editError && <p className="text-sm text-red-600">{editError}</p>}
+            </div>
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeEditReview}
+                disabled={editSaving}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveEdit()}
+                disabled={editSaving}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {editSaving && <Loader2 size={16} className="animate-spin" />}
+                Save changes
               </button>
             </div>
           </div>
