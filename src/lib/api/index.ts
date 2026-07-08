@@ -187,14 +187,57 @@ export const blogApi = {
     reject: (id: string, reason: string) => api.post(`/blog/admin/${id}/reject`, { reason }),
 };
 
+function normalizeReviewIds(reviewIds: string[]): string[] {
+    return [
+        ...new Set(
+            reviewIds
+                .map((id) => String(id ?? '').trim())
+                .filter((id) => id && id !== 'undefined' && id !== 'null'),
+        ),
+    ];
+}
+
 export const reviewApi = {
     getAll: (params?: { product_id?: string; source?: string; skip?: number; limit?: number }) =>
         api.get('/reviews/admin', { params }),
     bulkCreate: (reviews: any[]) => api.post('/reviews/admin/bulk', { reviews }),
-    bulkPublish: (reviewIds: string[], isPublished: boolean) =>
-        api.patch('/reviews/admin/bulk-publish', { review_ids: reviewIds, is_published: isPublished }),
-    bulkDelete: (reviewIds: string[]) =>
-        api.post('/reviews/admin/bulk-delete', { review_ids: reviewIds }),
+    bulkPublish: async (reviewIds: string[], isPublished: boolean) => {
+        const ids = normalizeReviewIds(reviewIds);
+        if (!ids.length) throw new Error('No reviews selected');
+        try {
+            return await api.patch('/reviews/admin/bulk-publish', {
+                review_ids: ids,
+                is_published: isPublished,
+            });
+        } catch (err: unknown) {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+            if (status !== 404 || (detail && detail !== 'Not Found')) throw err;
+            await Promise.all(
+                ids.map((id) => api.patch(`/reviews/${id}`, { is_published: isPublished })),
+            );
+            return { data: { updated_count: ids.length, matched_count: ids.length } };
+        }
+    },
+    bulkDelete: async (reviewIds: string[]) => {
+        const ids = normalizeReviewIds(reviewIds);
+        if (!ids.length) throw new Error('No reviews selected');
+        try {
+            return await api.post('/reviews/admin/bulk-delete', { review_ids: ids });
+        } catch (err: unknown) {
+            const status = (err as { response?: { status?: number } })?.response?.status;
+            if (status !== 404) throw err;
+        }
+        const results = await Promise.allSettled(ids.map((id) => api.delete(`/reviews/${id}`)));
+        const deleted = results.filter((r) => r.status === 'fulfilled').length;
+        if (deleted === 0) {
+            const firstReject = results.find((r) => r.status === 'rejected') as
+                | PromiseRejectedResult
+                | undefined;
+            throw firstReject?.reason ?? new Error('Bulk delete failed');
+        }
+        return { data: { deleted_count: deleted, failed_count: ids.length - deleted } };
+    },
     update: (id: string, data: any) => api.patch(`/reviews/${id}`, data),
     delete: (id: string) => api.delete(`/reviews/${id}`),
 };

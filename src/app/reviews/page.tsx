@@ -34,8 +34,10 @@ const BULK_EXAMPLE = `[
   }
 ]`;
 
-function getReviewId(review: any) {
-  return review._id || review.id;
+function getReviewId(review: any): string {
+  const raw = review?._id ?? review?.id;
+  if (raw == null) return "";
+  return String(raw);
 }
 
 function formatDate(value: string) {
@@ -178,7 +180,7 @@ export default function ReviewsPage() {
   };
 
   const runBulkPublish = async (isPublished: boolean) => {
-    const ids = [...selectedIds];
+    const ids = [...selectedIds].map(getReviewId).filter(Boolean);
     if (ids.length === 0) return;
     setBulkLoading(true);
     try {
@@ -198,7 +200,10 @@ export default function ReviewsPage() {
     } catch (err: any) {
       setToast({
         kind: "error",
-        message: err?.response?.data?.detail || "Bulk update failed.",
+        message:
+          typeof err?.response?.data?.detail === "string"
+            ? err.response.data.detail
+            : err?.message || "Bulk update failed.",
       });
     } finally {
       setBulkLoading(false);
@@ -206,8 +211,9 @@ export default function ReviewsPage() {
   };
 
   const confirmBulkDelete = () => {
-    const ids = [...selectedIds];
+    const ids = [...selectedIds].map(getReviewId).filter(Boolean);
     if (ids.length === 0) return;
+    const idSet = new Set(ids);
     setConfirm({
       title: "Delete selected reviews",
       message: `Remove ${ids.length} review(s)? This cannot be undone.`,
@@ -216,14 +222,18 @@ export default function ReviewsPage() {
       run: async () => {
         setBulkLoading(true);
         try {
-          await reviewApi.bulkDelete(ids);
-          setReviews((prev) => prev.filter((r) => !selectedIds.has(getReviewId(r))));
+          const res = await reviewApi.bulkDelete(ids);
+          const deleted = res.data?.deleted_count ?? ids.length;
+          setReviews((prev) => prev.filter((r) => !idSet.has(getReviewId(r))));
           setSelectedIds(new Set());
-          setToast({ kind: "success", message: `Deleted ${ids.length} review(s).` });
+          setToast({ kind: "success", message: `Deleted ${deleted} review(s).` });
         } catch (err: any) {
           setToast({
             kind: "error",
-            message: err?.response?.data?.detail || "Bulk delete failed.",
+            message:
+              typeof err?.response?.data?.detail === "string"
+                ? err.response.data.detail
+                : err?.message || "Bulk delete failed.",
           });
           throw err;
         } finally {
