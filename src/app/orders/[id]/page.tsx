@@ -592,6 +592,24 @@ export default function OrderDetailPage() {
                   </div>
                 </div>
               )}
+              {order.instagram_packing_opt_in && order.instagram_username && (
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-pink-50 flex items-center justify-center text-pink-600 flex-shrink-0 text-xs font-black">
+                    IG
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Instagram packing video</p>
+                    <a
+                      href={`https://instagram.com/${order.instagram_username.replace(/^@+/, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-slate-900 hover:text-indigo-600"
+                    >
+                      @{order.instagram_username.replace(/^@+/, '')}
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
