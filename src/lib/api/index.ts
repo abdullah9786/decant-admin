@@ -109,6 +109,8 @@ export const orderApi = {
 
 export const userApi = {
     getAll: () => api.get('/users'),
+    getOne: (id: string) => api.get(`/users/${id}`),
+    getOrders: (id: string) => api.get(`/users/${id}/orders`),
     delete: (id: string) => api.delete(`/users/${id}`),
     toggleAdmin: (id: string) => api.post(`/users/${id}/toggle-admin`),
     createAdmin: (data: any) => api.post('/users/create-admin', data),

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import {
   Search,
   UserPlus,
@@ -16,6 +17,7 @@ import {
   Lock,
   User,
   CheckCircle2,
+  Eye,
 } from 'lucide-react';
 import { userApi } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -267,9 +269,12 @@ export default function UserManagement() {
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="font-bold text-slate-900 truncate">
+                              <Link
+                                href={`/users/${uid}`}
+                                className="font-bold text-slate-900 truncate hover:text-indigo-600 transition-colors"
+                              >
                                 {user.full_name || 'Unnamed User'}
-                              </p>
+                              </Link>
                               {user.is_admin && (
                                 <ShieldCheck size={14} className="text-indigo-600 flex-shrink-0" />
                               )}
@@ -305,6 +310,13 @@ export default function UserManagement() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link
+                            href={`/users/${uid}`}
+                            title="View profile & orders"
+                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                          >
+                            <Eye size={16} />
+                          </Link>
                           <button
                             onClick={() => askToggleAdmin(user)}
                             disabled={isProcessing}
