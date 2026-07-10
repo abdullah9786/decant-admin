@@ -104,7 +104,11 @@ export default function UserManagement() {
         try {
           const response = await userApi.toggleAdmin(uid);
           const updatedUser = response.data;
-          setUsers(prev => prev.map(u => (u.id === uid || u._id === uid ? updatedUser : u)));
+          setUsers(prev => prev.map(u => (
+            (u.id === uid || u._id === uid)
+              ? { ...u, ...updatedUser, order_count: u.order_count ?? 0, order_total: u.order_total ?? 0 }
+              : u
+          )));
           setToast({
             kind: 'success',
             message: promoting ? 'Admin access granted.' : 'Admin access revoked.',
@@ -236,6 +240,8 @@ export default function UserManagement() {
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">User</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Email</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Role</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Orders</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Order Total</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">
                     Actions
@@ -302,6 +308,12 @@ export default function UserManagement() {
                         >
                           {user.is_admin ? 'Admin' : 'Customer'}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-700 tabular-nums">
+                        {user.order_count ?? 0}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-indigo-600 tabular-nums">
+                        ₹{Number(user.order_total ?? 0).toLocaleString('en-IN')}
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-green-600 bg-green-50 border border-green-100">
