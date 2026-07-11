@@ -54,13 +54,25 @@ export default function OrderDetailPage() {
   const [promoSubmission, setPromoSubmission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [savingTracking, setSavingTracking] = useState(false);
+  const [trackingForm, setTrackingForm] = useState({
+    courier_name: '',
+    tracking_id: '',
+    tracking_url: '',
+  });
   const [cancelConfirm, setCancelConfirm] = useState<{ itemIndex: number; itemName: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const fetchOrder = async () => {
     try {
       const response = await orderApi.getOne(orderId);
-      setOrder(response.data);
+      const data = response.data;
+      setOrder(data);
+      setTrackingForm({
+        courier_name: data.courier_name || '',
+        tracking_id: data.tracking_id || '',
+        tracking_url: data.tracking_url || '',
+      });
       try {
         const promoRes = await promoSubmissionsApi.getByOrder(orderId);
         setPromoSubmission(promoRes.data);
@@ -123,6 +135,66 @@ export default function OrderDetailPage() {
     navigator.clipboard.writeText(orderId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveTracking = async () => {
+    if (!order) return;
+    const tracking_id = trackingForm.tracking_id.trim();
+    const tracking_url = trackingForm.tracking_url.trim();
+    const courier_name = trackingForm.courier_name.trim();
+
+    if (!tracking_id && !tracking_url) {
+      alert('Add a tracking ID or tracking URL (or both).');
+      return;
+    }
+
+    setSavingTracking(true);
+    try {
+      const payload: Record<string, string> = {
+        tracking_id,
+        tracking_url,
+        courier_name,
+      };
+      if (order.status !== 'shipped' && order.status !== 'delivered') {
+        payload.status = 'shipped';
+      }
+
+      const response = await orderApi.update(orderId, payload);
+      const data = response.data;
+      setOrder(data);
+      setTrackingForm({
+        courier_name: data.courier_name || '',
+        tracking_id: data.tracking_id || '',
+        tracking_url: data.tracking_url || '',
+      });
+    } catch (err: any) {
+      console.error('Error saving tracking', err);
+      alert(err.response?.data?.detail || 'Failed to save tracking');
+    } finally {
+      setSavingTracking(false);
+    }
+  };
+
+  const handleClearTracking = async () => {
+    if (!order) return;
+    if (!confirm('Remove tracking details from this order?')) return;
+
+    setSavingTracking(true);
+    try {
+      const response = await orderApi.update(orderId, {
+        tracking_id: '',
+        tracking_url: '',
+        courier_name: '',
+      });
+      const data = response.data;
+      setOrder(data);
+      setTrackingForm({ courier_name: '', tracking_id: '', tracking_url: '' });
+    } catch (err) {
+      console.error('Error clearing tracking', err);
+      alert('Failed to clear tracking');
+    } finally {
+      setSavingTracking(false);
+    }
   };
 
   if (loading) {
@@ -550,6 +622,98 @@ export default function OrderDetailPage() {
                   <Loader2 size={12} className="animate-spin" /> Updating...
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Courier tracking */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+              <Truck size={16} className="text-indigo-600" />
+              <h3 className="text-sm font-bold text-slate-900">Courier tracking</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Paste the tracking ID and/or URL from your courier portal after dispatch.
+                Status will move to <strong>Shipped</strong> when you save (if not already).
+              </p>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Courier name <span className="font-normal normal-case">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={trackingForm.courier_name}
+                  onChange={(e) => setTrackingForm((f) => ({ ...f, courier_name: e.target.value }))}
+                  placeholder="e.g. Delhivery, Shiprocket"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Tracking ID <span className="font-normal normal-case">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={trackingForm.tracking_id}
+                  onChange={(e) => setTrackingForm((f) => ({ ...f, tracking_id: e.target.value }))}
+                  placeholder="AWB / tracking number"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono text-slate-900 outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Tracking URL <span className="font-normal normal-case">(optional)</span>
+                </label>
+                <input
+                  type="url"
+                  value={trackingForm.tracking_url}
+                  onChange={(e) => setTrackingForm((f) => ({ ...f, tracking_url: e.target.value }))}
+                  placeholder="https://..."
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={handleSaveTracking}
+                  disabled={savingTracking}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingTracking ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Save tracking
+                </button>
+                {(order.tracking_id || order.tracking_url) ? (
+                  <button
+                    type="button"
+                    onClick={handleClearTracking}
+                    disabled={savingTracking}
+                    className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+
+              {order.shipped_at ? (
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Tracking saved {safeDate(order.shipped_at).toLocaleString()}
+                </p>
+              ) : null}
+
+              {order.tracking_url ? (
+                <a
+                  href={order.tracking_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                >
+                  Open courier tracking link
+                </a>
+              ) : null}
             </div>
           </div>
 
