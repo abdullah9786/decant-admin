@@ -29,6 +29,7 @@ import {
   Layers,
   MessageSquare,
   BookOpen,
+  Instagram,
 } from 'lucide-react';
 import { PerfumeBottle } from '@/components/icons/PerfumeBottle';
 import { clsx, type ClassValue } from 'clsx';
@@ -59,6 +60,7 @@ const navItems = [
   { name: 'Payouts', href: '/payouts', icon: Wallet },
   { name: 'Coupons', href: '/coupons', icon: Ticket },
   { name: 'Offers', href: '/offers', icon: Percent },
+  { name: 'Promo Submissions', href: '/promo-submissions', icon: Instagram },
   { name: 'Chips', href: '/chips', icon: BadgeCheck },
 ];
 

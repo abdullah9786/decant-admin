@@ -89,6 +89,21 @@ function OrderPerks({ order }: { order: any }) {
       icon: <Instagram size={11} />,
     });
   }
+  if (order.instagram_promo_opt_in) {
+    const ps = order.promo_submission;
+    const status = ps?.status;
+    let label = "Instagram promo eligible";
+    if (status === "submitted" || status === "under_review") label = "Promo: in review";
+    else if (status === "approved" || status === "fulfilled") label = `Promo won${ps?.prize_label ? `: ${ps.prize_label}` : ""}`;
+    else if (status === "rejected") label = "Promo: not selected";
+    else if (status === "awaiting_post") label = "Promo: awaiting post";
+    perks.push({
+      key: "insta-promo",
+      label,
+      className: "bg-emerald-50 text-emerald-800 border-emerald-200",
+      icon: <Instagram size={11} />,
+    });
+  }
 
   if (!perks.length && !order.free_decants_dropped_reason) return null;
 

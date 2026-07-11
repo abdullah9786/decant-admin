@@ -166,6 +166,16 @@ export const offerApi = {
     delete: (id: string) => api.delete(`/offers/${id}`),
 };
 
+export const promoSubmissionsApi = {
+    listQueue: (status?: string) =>
+        api.get('/promo-submissions/admin/queue', { params: status ? { status } : {} }),
+    getByOrder: (orderId: string) => api.get(`/promo-submissions/admin/by-order/${orderId}`),
+    approve: (id: string, body: { prize_template_id: string; admin_notes?: string }) =>
+        api.post(`/promo-submissions/admin/${id}/approve`, body),
+    reject: (id: string, reason: string) =>
+        api.post(`/promo-submissions/admin/${id}/reject`, { reason }),
+};
+
 export const chipApi = {
     getAll: () => api.get('/chips'),
     getActive: () => api.get('/chips/active'),

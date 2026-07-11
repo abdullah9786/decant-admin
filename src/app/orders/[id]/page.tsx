@@ -24,8 +24,9 @@ import {
   Hash,
   Receipt,
   Printer,
+  Instagram,
 } from 'lucide-react';
-import { orderApi } from '@/lib/api';
+import { orderApi, promoSubmissionsApi } from '@/lib/api';
 import { clsx } from 'clsx';
 
 function safeDate(v: string | undefined | null): Date {
@@ -50,6 +51,7 @@ export default function OrderDetailPage() {
   const orderId = params.id as string;
 
   const [order, setOrder] = useState<any>(null);
+  const [promoSubmission, setPromoSubmission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState<{ itemIndex: number; itemName: string } | null>(null);
@@ -59,6 +61,12 @@ export default function OrderDetailPage() {
     try {
       const response = await orderApi.getOne(orderId);
       setOrder(response.data);
+      try {
+        const promoRes = await promoSubmissionsApi.getByOrder(orderId);
+        setPromoSubmission(promoRes.data);
+      } catch {
+        setPromoSubmission(null);
+      }
     } catch (err) {
       console.error("Error fetching order", err);
     } finally {
@@ -607,6 +615,48 @@ export default function OrderDetailPage() {
                     >
                       @{order.instagram_username.replace(/^@+/, '')}
                     </a>
+                  </div>
+                </div>
+              )}
+              {order.instagram_promo_opt_in && (
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 flex-shrink-0">
+                    <Instagram size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Instagram promo</p>
+                    <p className="text-sm text-slate-900">Eligible while promo campaign is active</p>
+                    {promoSubmission ? (
+                      <div className="mt-1 text-xs text-slate-500 space-y-1">
+                        <p>Status: <span className="font-bold text-emerald-700">{promoSubmission.status}</span></p>
+                        {promoSubmission.poster_instagram_username && (
+                          <p>
+                            Poster:{" "}
+                            <a
+                              href={`https://instagram.com/${promoSubmission.poster_instagram_username}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-indigo-600 hover:underline"
+                            >
+                              @{promoSubmission.poster_instagram_username}
+                            </a>
+                          </p>
+                        )}
+                        {promoSubmission.post_url && (
+                          <a href={promoSubmission.post_url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline block">
+                            View submitted post
+                          </a>
+                        )}
+                        {promoSubmission.prize_snapshot?.label && (
+                          <p className="text-green-700 font-medium">Prize: {promoSubmission.prize_snapshot.label}</p>
+                        )}
+                        <Link href="/promo-submissions" className="text-indigo-600 hover:underline inline-block mt-1">
+                          Open promo queue →
+                        </Link>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 mt-1">No submission yet (created on delivery)</p>
+                    )}
                   </div>
                 </div>
               )}

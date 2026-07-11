@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, Search, Trash2, Edit2, Loader2, Percent, AlertCircle,
-  CheckCircle2, X, Calendar, Clock, Gift, ArrowUp, ArrowDown,
+  CheckCircle2, X, Calendar, Clock, Gift, ArrowUp, ArrowDown, GripVertical,
 } from 'lucide-react';
 import { offerApi, productApi } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -58,6 +58,7 @@ const OFFER_TYPES = [
   { value: 'free_decant', label: 'Free Decant' },
   { value: 'daily_deal', label: 'Daily Deal' },
   { value: 'mystery_gift', label: 'Mystery Gift' },
+  { value: 'instagram_promo', label: 'Instagram Promo' },
 ];
 
 // Curated icon set the storefront ladder knows how to render. Stored as a
@@ -83,6 +84,19 @@ const makeTier = (overrides: Partial<MysteryTier> = {}): MysteryTier => ({
   accent_color: '#7c3aed',
   icon: 'gift',
   tagline: '',
+  ...overrides,
+});
+
+interface PromoPrizeTemplate {
+  id: string;
+  label: string;
+  items: { product_id: string; name: string; size_ml: number; quantity: number }[];
+}
+
+const makePrizeTemplate = (overrides: Partial<PromoPrizeTemplate> = {}): PromoPrizeTemplate => ({
+  id: newTierId(),
+  label: '',
+  items: [{ product_id: '', name: '', size_ml: 2, quantity: 1 }],
   ...overrides,
 });
 
@@ -114,6 +128,15 @@ const defaultConfig = {
   apply_to: 'all',
   // mystery_gift
   tiers: [] as MysteryTier[],
+  // instagram_promo
+  min_followers: 100,
+  require_public_account: true,
+  required_mention: '@decume.in',
+  required_hashtags: ['#decume'] as string[],
+  submission_deadline_days: 14,
+  max_posts_per_poster_account: 3,
+  poster_limit_window_days: 30,
+  prize_templates: [] as PromoPrizeTemplate[],
 };
 
 const defaultDisplay = {
@@ -133,6 +156,9 @@ const defaultDisplay = {
   title_gift: 'Unlock a Mystery Gift',
   locked_prompt: 'Spend {remaining} more to unlock {next}',
   box_color: '#7c3aed',
+  // instagram_promo
+  checkout_label: 'Enter our Instagram promo after delivery — chance to win a free decant',
+  rules_copy: '',
 };
 
 interface OfferForm {
@@ -176,6 +202,8 @@ export default function OfferManagement() {
 
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [productSearch, setProductSearch] = useState('');
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const getId = (p: any) => p.id || p._id;
 
@@ -237,6 +265,27 @@ export default function OfferManagement() {
               tagline: t.tagline || '',
             }))
           : [],
+        min_followers: cfg.min_followers ?? 100,
+        require_public_account: cfg.require_public_account !== false,
+        required_mention: cfg.required_mention ?? '@decume.in',
+        required_hashtags: cfg.required_hashtags || ['#decume'],
+        submission_deadline_days: cfg.submission_deadline_days ?? 14,
+        max_posts_per_poster_account: cfg.max_posts_per_poster_account ?? 3,
+        poster_limit_window_days: cfg.poster_limit_window_days ?? 30,
+        prize_templates: Array.isArray(cfg.prize_templates)
+          ? cfg.prize_templates.map((t: any) => makePrizeTemplate({
+              id: t.id || newTierId(),
+              label: t.label || '',
+              items: Array.isArray(t.items) && t.items.length
+                ? t.items.map((it: any) => ({
+                    product_id: it.product_id || '',
+                    name: it.name || '',
+                    size_ml: Number(it.size_ml) || 2,
+                    quantity: Number(it.quantity) || 1,
+                  }))
+                : [{ product_id: '', name: '', size_ml: 2, quantity: 1 }],
+            }))
+          : [],
       },
       display: {
         // free_decant slice
@@ -255,6 +304,8 @@ export default function OfferManagement() {
         title_gift: dsp.title_gift || 'Unlock a Mystery Gift',
         locked_prompt: dsp.locked_prompt || 'Spend {remaining} more to unlock {next}',
         box_color: dsp.box_color || '#7c3aed',
+        checkout_label: dsp.checkout_label || 'Enter our Instagram promo after delivery — chance to win a free decant',
+        rules_copy: dsp.rules_copy || '',
       },
     });
     setProductSearch('');
@@ -363,6 +414,38 @@ export default function OfferManagement() {
     });
   };
 
+  const addPrizeTemplate = () => {
+    setForm(prev => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        prize_templates: [...(prev.config.prize_templates || []), makePrizeTemplate()],
+      },
+    }));
+  };
+
+  const updatePrizeTemplate = (id: string, patch: Partial<PromoPrizeTemplate>) => {
+    setForm(prev => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        prize_templates: (prev.config.prize_templates || []).map(t =>
+          t.id === id ? { ...t, ...patch } : t
+        ),
+      },
+    }));
+  };
+
+  const removePrizeTemplate = (id: string) => {
+    setForm(prev => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        prize_templates: (prev.config.prize_templates || []).filter(t => t.id !== id),
+      },
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalLoading(true);
@@ -390,6 +473,19 @@ export default function OfferManagement() {
       }
       if (tiers.some(t => !t.min_subtotal || t.min_subtotal <= 0)) {
         setModalError('Every tier needs an unlock amount greater than 0.');
+        setModalLoading(false);
+        return;
+      }
+    }
+    if (form.type === 'instagram_promo') {
+      const templates = form.config.prize_templates || [];
+      if (templates.length === 0) {
+        setModalError('Add at least one prize template.');
+        setModalLoading(false);
+        return;
+      }
+      if (templates.some(t => !t.label.trim())) {
+        setModalError('Every prize template needs a label.');
         setModalLoading(false);
         return;
       }
@@ -434,12 +530,66 @@ export default function OfferManagement() {
     o.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const sortedOffers = [...filteredOffers].sort((a, b) => {
+    const aOrder = a.sort_order ?? 0;
+    const bOrder = b.sort_order ?? 0;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  const handleDrop = async (targetId: string) => {
+    if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
+    const current = [...offers].sort((a, b) => {
+      const aOrder = a.sort_order ?? 0;
+      const bOrder = b.sort_order ?? 0;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+    const fromIndex = current.findIndex((o) => o._id === draggingId);
+    const toIndex = current.findIndex((o) => o._id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const prevOrderMap = new Map(current.map((o) => [o._id, o.sort_order ?? 0]));
+    const moved = current.splice(fromIndex, 1)[0];
+    current.splice(toIndex, 0, moved);
+    const updated = current.map((o, idx) => ({ ...o, sort_order: idx + 1 }));
+
+    setOffers((prev) =>
+      prev.map((o) => {
+        const found = updated.find((u) => u._id === o._id);
+        return found ? { ...o, sort_order: found.sort_order } : o;
+      })
+    );
+
+    const changed = updated.filter((o) => prevOrderMap.get(o._id) !== o.sort_order);
+    if (changed.length === 0) return;
+
+    setSavingOrder(true);
+    try {
+      await Promise.all(
+        changed.map((o) => offerApi.update(o._id, { sort_order: o.sort_order }))
+      );
+    } catch (err) {
+      console.error('Error updating offer order', err);
+      alert('Failed to save order.');
+      await fetchOffers();
+    } finally {
+      setSavingOrder(false);
+      setDraggingId(null);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Offers</h1>
           <p className="text-slate-500 mt-1">Manage promotional offers like free decants with qualifying purchases.</p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
+            Drag cards to set homepage order
+            {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {savingOrder ? ' • saving…' : ''}
+          </p>
         </div>
         <button
           onClick={openAddModal}
@@ -486,22 +636,40 @@ export default function OfferManagement() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredOffers.map(offer => {
+          {sortedOffers.map((offer, index) => {
             const cfg = offer.config || {};
             const eligibleCount = offer.type === 'daily_deal'
               ? (cfg.product_ids || []).length
               : (cfg.eligible_product_ids || []).length;
             const state = getOfferState(offer);
+            const dragEnabled = searchTerm.trim().length === 0;
             return (
               <div
                 key={offer._id}
+                draggable={dragEnabled}
+                onDragStart={() => dragEnabled && setDraggingId(offer._id)}
+                onDragOver={(e) => {
+                  if (dragEnabled) e.preventDefault();
+                }}
+                onDrop={() => {
+                  if (dragEnabled) void handleDrop(offer._id);
+                }}
+                onDragEnd={() => setDraggingId(null)}
                 className={clsx(
                   'bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden',
-                  !offer.is_active && 'opacity-60'
+                  !offer.is_active && 'opacity-60',
+                  draggingId === offer._id && 'ring-2 ring-indigo-300',
                 )}
               >
                 <div className="h-24 w-full bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center relative">
                   <Percent size={36} className="text-amber-400" />
+                  <span className="absolute top-3 left-3 flex items-center gap-1.5 rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-slate-500 border border-slate-200">
+                    <GripVertical
+                      size={12}
+                      className={clsx(dragEnabled ? 'text-slate-400' : 'opacity-40')}
+                    />
+                    #{offer.sort_order ?? index + 1}
+                  </span>
                   <span className={clsx(
                     'absolute top-3 right-3 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full',
                     state.cls
@@ -538,6 +706,12 @@ export default function OfferManagement() {
                               ))
                           )}
                         </div>
+                      ) : offer.type === 'instagram_promo' ? (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-[10px] uppercase tracking-widest text-slate-400">
+                          <span>{cfg.max_posts_per_poster_account ?? 3} posts / {cfg.poster_limit_window_days ?? 30}d</span>
+                          <span>{(cfg.prize_templates || []).length} prize template{(cfg.prize_templates || []).length === 1 ? '' : 's'}</span>
+                          <span>{cfg.submission_deadline_days ?? 14}d deadline</span>
+                        </div>
                       ) : (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[10px] uppercase tracking-widest text-slate-400">
                           <span>Min {cfg.min_qualifying_ml || 10}ml</span>
@@ -551,6 +725,10 @@ export default function OfferManagement() {
                       {offer.type === 'mystery_gift' ? (
                         <p className="text-[10px] uppercase tracking-widest text-indigo-500 font-bold mt-1">
                           {(cfg.tiers || []).length} Tier{(cfg.tiers || []).length === 1 ? '' : 's'}
+                        </p>
+                      ) : offer.type === 'instagram_promo' ? (
+                        <p className="text-[10px] uppercase tracking-widest text-emerald-600 font-bold mt-1">
+                          Instagram Promo Campaign
                         </p>
                       ) : (
                         <p className="text-[10px] uppercase tracking-widest text-indigo-500 font-bold mt-1">
@@ -590,7 +768,7 @@ export default function OfferManagement() {
               </div>
             );
           })}
-          {filteredOffers.length === 0 && (
+          {sortedOffers.length === 0 && (
             <div className="col-span-full py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center space-y-4">
               <div className="p-4 bg-white rounded-full text-slate-300">
                 <Percent size={40} />
@@ -933,6 +1111,86 @@ export default function OfferManagement() {
                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
                           />
                         </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {form.type === 'instagram_promo' && (
+                  <>
+                    <div className="border-t border-slate-100 pt-6 space-y-4">
+                      <p className="text-slate-900 font-bold">Instagram Promo Rules</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Min followers</label>
+                          <input type="number" min={1} value={form.config.min_followers}
+                            onChange={e => setForm({ ...form, config: { ...form.config, min_followers: parseInt(e.target.value || '100') } })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Deadline (days)</label>
+                          <input type="number" min={1} value={form.config.submission_deadline_days}
+                            onChange={e => setForm({ ...form, config: { ...form.config, submission_deadline_days: parseInt(e.target.value || '14') } })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Max posts / poster</label>
+                          <input type="number" min={1} value={form.config.max_posts_per_poster_account}
+                            onChange={e => setForm({ ...form, config: { ...form.config, max_posts_per_poster_account: parseInt(e.target.value || '3') } })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Window (days)</label>
+                          <input type="number" min={1} value={form.config.poster_limit_window_days}
+                            onChange={e => setForm({ ...form, config: { ...form.config, poster_limit_window_days: parseInt(e.target.value || '30') } })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Required mention</label>
+                        <input type="text" value={form.config.required_mention}
+                          onChange={e => setForm({ ...form, config: { ...form.config, required_mention: e.target.value } })}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Hashtags (comma-separated)</label>
+                        <input type="text" value={(form.config.required_hashtags || []).join(', ')}
+                          onChange={e => setForm({ ...form, config: { ...form.config, required_hashtags: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-slate-900 font-bold">Prize Templates</p>
+                        <button type="button" onClick={addPrizeTemplate}
+                          className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg flex items-center gap-1">
+                          <Plus size={12} /> Add Prize
+                        </button>
+                      </div>
+                      {(form.config.prize_templates || []).map((tpl, idx) => (
+                        <div key={tpl.id} className="rounded-xl border border-slate-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prize {idx + 1}</span>
+                            <button type="button" onClick={() => removePrizeTemplate(tpl.id)} className="p-1.5 text-slate-400 hover:text-red-600"><Trash2 size={14} /></button>
+                          </div>
+                          <input type="text" placeholder="Prize label (e.g. 1× 2ml Premium Decant)" value={tpl.label}
+                            onChange={e => updatePrizeTemplate(tpl.id, { label: e.target.value })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
+                          <input type="text" placeholder="Product name (for fulfillment reference)" value={tpl.items[0]?.name || ''}
+                            onChange={e => updatePrizeTemplate(tpl.id, { items: [{ ...tpl.items[0], name: e.target.value, product_id: tpl.items[0]?.product_id || '', size_ml: tpl.items[0]?.size_ml || 2, quantity: tpl.items[0]?.quantity || 1 }] })}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm" />
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-6 space-y-4">
+                      <p className="text-slate-900 font-bold">Display</p>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Checkout label</label>
+                        <input type="text" value={form.display.checkout_label}
+                          onChange={e => setForm({ ...form, display: { ...form.display, checkout_label: e.target.value } })}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" />
                       </div>
                     </div>
                   </>
