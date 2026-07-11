@@ -15,12 +15,26 @@ export default function PromoSubmissionsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
-  const [prizeTemplates, setPrizeTemplates] = useState<any[]>([]);
+  const [promoOffersById, setPromoOffersById] = useState<Record<string, any>>({});
+  const [modalPrizeTemplates, setModalPrizeTemplates] = useState<any[]>([]);
 
   const [approveTarget, setApproveTarget] = useState<any | null>(null);
   const [prizeTemplateId, setPrizeTemplateId] = useState("");
   const [rejectTarget, setRejectTarget] = useState<any | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+
+  const resolvePrizeTemplates = useCallback(
+    (submission: any) => {
+      const campaignId = submission?.campaign_id;
+      const linked = campaignId ? promoOffersById[campaignId] : undefined;
+      if (linked?.config?.prize_templates?.length) {
+        return linked.config.prize_templates;
+      }
+      const activePromo = Object.values(promoOffersById).find((o) => o.is_active);
+      return activePromo?.config?.prize_templates || [];
+    },
+    [promoOffersById],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,12 +44,17 @@ export default function PromoSubmissionsPage() {
         offerApi.getAll(),
       ]);
       setRows(queueRes.data || []);
-      const promo = (offersRes.data || []).find(
-        (o: any) => o.type === "instagram_promo" && o.is_active
+      const promoOffers = (offersRes.data || []).filter(
+        (o: any) => o.type === "instagram_promo",
       );
-      setPrizeTemplates(promo?.config?.prize_templates || []);
+      const byId: Record<string, any> = {};
+      for (const offer of promoOffers) {
+        byId[offer._id || offer.id] = offer;
+      }
+      setPromoOffersById(byId);
     } catch {
       setRows([]);
+      setPromoOffersById({});
     } finally {
       setLoading(false);
     }
@@ -52,6 +71,7 @@ export default function PromoSubmissionsPage() {
     try {
       await promoSubmissionsApi.approve(id, { prize_template_id: prizeTemplateId });
       setApproveTarget(null);
+      setModalPrizeTemplates([]);
       setPrizeTemplateId("");
       await load();
     } catch (e: any) {
@@ -176,8 +196,10 @@ export default function PromoSubmissionsPage() {
                             <button
                               disabled={isBusy}
                               onClick={() => {
+                                const templates = resolvePrizeTemplates(row);
+                                setModalPrizeTemplates(templates);
                                 setApproveTarget(row);
-                                setPrizeTemplateId(prizeTemplates[0]?.id || "");
+                                setPrizeTemplateId(templates[0]?.id || "");
                               }}
                               className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
                               title="Approve"
@@ -223,15 +245,23 @@ export default function PromoSubmissionsPage() {
               onChange={(e) => setPrizeTemplateId(e.target.value)}
               className="w-full mt-1 mb-6 px-4 py-3 border border-slate-200 rounded-lg text-sm font-bold"
             >
-              {prizeTemplates.map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
+              {modalPrizeTemplates.length === 0 ? (
+                <option value="">No prizes configured for this campaign</option>
+              ) : (
+                modalPrizeTemplates.map((t: any) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label || "Unnamed prize"}
+                  </option>
+                ))
+              )}
             </select>
             <div className="flex gap-3">
               <button
-                onClick={() => setApproveTarget(null)}
+                onClick={() => {
+                  setApproveTarget(null);
+                  setModalPrizeTemplates([]);
+                  setPrizeTemplateId("");
+                }}
                 className="flex-1 py-3 border border-slate-200 rounded-xl text-xs font-bold uppercase"
               >
                 Cancel
