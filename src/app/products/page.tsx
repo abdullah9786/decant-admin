@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Plus,
@@ -19,15 +19,22 @@ import {
   X,
   BadgeCheck,
   BadgeMinus,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { productApi, chipApi } from '@/lib/api';
 import { clsx } from 'clsx';
 import { chipColorCls } from '@/components/shared/ChipPickerSection';
 
+const PAGE_SIZE = 50;
+
 export default function ProductList() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [savingOrder, setSavingOrder] = useState(false);
@@ -48,22 +55,45 @@ export default function ProductList() {
   const [chipPickerMode, setChipPickerMode] = useState<'add' | 'remove' | null>(null);
   const [pickedChipIds, setPickedChipIds] = useState<Set<string>>(new Set());
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await productApi.getAll({ include_inactive: true });
-      setProducts((response.data || []).filter((p: any) => (p.product_type || 'single') !== 'set'));
+      const response = await productApi.getAll({
+        include_inactive: true,
+        paginated: true,
+        exclude_product_type: 'set',
+        skip: (page - 1) * PAGE_SIZE,
+        limit: PAGE_SIZE,
+        q: debouncedSearch.trim() || undefined,
+      });
+      const data = response.data;
+      if (data?.items) {
+        setProducts(data.items);
+        setTotal(data.total ?? 0);
+      } else {
+        setProducts(Array.isArray(data) ? data : []);
+        setTotal(Array.isArray(data) ? data.length : 0);
+      }
     } catch (err) {
       console.error("Error fetching products", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, debouncedSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     fetchProducts();
     chipApi.getAll().then(res => setAllChips(res.data || [])).catch(() => {});
-  }, []);
+  }, [fetchProducts]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
@@ -71,6 +101,7 @@ export default function ProductList() {
     try {
       await productApi.delete(id);
       setProducts(products.filter(p => p.id !== id && p._id !== id));
+      setTotal(prev => Math.max(0, prev - 1));
       setSelectedIds(prev => {
         const next = new Set(prev);
         next.delete(id);
@@ -84,23 +115,15 @@ export default function ProductList() {
     }
   };
 
-  const sortedProducts = [...products].sort((a, b) => {
-    const aOrder = a.sort_order ?? 0;
-    const bOrder = b.sort_order ?? 0;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return bCreated - aCreated;
-  });
-
-  const filteredProducts = sortedProducts.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.brand.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const displayedProducts = products;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canReorder = debouncedSearch.trim().length === 0 && page === 1 && total <= PAGE_SIZE;
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   const getId = (product: any) => product.id || product._id;
 
-  const filteredIds = useMemo(() => filteredProducts.map(getId), [filteredProducts]);
+  const filteredIds = useMemo(() => displayedProducts.map(getId), [displayedProducts]);
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.has(id));
   const someFilteredSelected = filteredIds.some(id => selectedIds.has(id));
 
@@ -128,8 +151,8 @@ export default function ProductList() {
   const clearSelection = () => setSelectedIds(new Set());
 
   const handleDrop = async (targetId: string) => {
-    if (!draggingId || draggingId === targetId || searchTerm.trim().length > 0) return;
-    const current = [...sortedProducts];
+    if (!draggingId || draggingId === targetId || !canReorder) return;
+    const current = [...displayedProducts];
     const fromIndex = current.findIndex((p) => getId(p) === draggingId);
     const toIndex = current.findIndex((p) => getId(p) === targetId);
     if (fromIndex === -1 || toIndex === -1) return;
@@ -200,6 +223,7 @@ export default function ProductList() {
       if (idx === -1) return true;
       return results[idx].status === 'rejected';
     }));
+    setTotal(prev => Math.max(0, prev - ok));
     setSelectedIds(new Set());
     setBulkResult({ ok, fail, action: 'delete' });
     setBulkLoading(null);
@@ -289,8 +313,8 @@ export default function ProductList() {
           <h1 className="text-2xl font-bold text-slate-900">Products</h1>
           <p className="text-slate-500 mt-1">Manage your perfume catalog and decant variants.</p>
           <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
-            Drag rows to reorder
-            {searchTerm.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {canReorder ? 'Drag rows to reorder' : 'Reorder available on page 1 when all products fit one page'}
+            {debouncedSearch.trim().length > 0 ? ' (clear search to reorder)' : ''}
             {savingOrder ? ' • saving…' : ''}
           </p>
         </div>
@@ -325,7 +349,8 @@ export default function ProductList() {
           />
         </div>
         <div className="flex items-center space-x-3 text-xs font-bold text-slate-400 uppercase tracking-widest">
-          {filteredProducts.length} Results
+          {total} {total === 1 ? 'Product' : 'Products'}
+          {debouncedSearch.trim() && ` matching "${debouncedSearch.trim()}"`}
         </div>
       </div>
 
@@ -489,7 +514,7 @@ export default function ProductList() {
           <div className="h-64 flex items-center justify-center">
             <Loader2 className="animate-spin text-indigo-600" size={32} />
           </div>
-        ) : filteredProducts.length === 0 ? (
+        ) : displayedProducts.length === 0 ? (
           <div className="h-64 flex flex-col items-center justify-center space-y-4">
             <AlertTriangle className="text-slate-300" size={48} />
             <p className="text-slate-500 font-medium italic">No products found matching your search.</p>
@@ -522,12 +547,12 @@ export default function ProductList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredProducts.map((product) => {
+                {displayedProducts.map((product) => {
                   const totalStock = product.stock_ml || 0;
                   const isLowStock = totalStock > 0 && totalStock < 50;
                   const productId = getId(product);
                   const isSelected = selectedIds.has(productId);
-                  const dragEnabled = searchTerm.trim().length === 0 && !isSelected && selectionCount === 0;
+                  const dragEnabled = canReorder && !isSelected && selectionCount === 0;
 
                   return (
                     <tr
@@ -662,6 +687,38 @@ export default function ProductList() {
           </div>
         )}
       </div>
+
+      {!loading && total > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-sm text-slate-500">
+            Showing <span className="font-bold text-slate-700">{rangeStart}–{rangeEnd}</span> of{' '}
+            <span className="font-bold text-slate-700">{total}</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1 || loading}
+              className="inline-flex items-center gap-1 px-3 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+            <span className="text-sm font-bold text-slate-500 px-2">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || loading}
+              className="inline-flex items-center gap-1 px-3 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bulk chip picker modal */}
       {chipPickerMode && (
