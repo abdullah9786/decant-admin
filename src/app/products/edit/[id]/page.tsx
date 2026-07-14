@@ -38,7 +38,6 @@ export default function EditProductPage() {
     images: [] as string[],
     stock_ml: 0,
     sort_order: 0,
-    is_featured: false,
     featured_decant: false,
     featured_sealed_bottle: false,
     is_new_arrival: false,
@@ -98,7 +97,6 @@ export default function EditProductPage() {
           images: product.images || [],
           stock_ml: product.stock_ml || 0,
           sort_order: product.sort_order || 0,
-          is_featured: product.is_featured || false,
           featured_decant: product.featured_decant || false,
           featured_sealed_bottle: product.featured_sealed_bottle || false,
           is_new_arrival: product.is_new_arrival || false,
@@ -754,16 +752,6 @@ export default function EditProductPage() {
           <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="text-slate-900 font-bold">Visibility</div>
             <div className="space-y-4">
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <input 
-                  name="is_featured"
-                  type="checkbox" 
-                  checked={formData.is_featured}
-                  onChange={handleInputChange}
-                  className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" 
-                />
-                <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-600">Mark as Featured</span>
-              </label>
               <label className="flex items-center space-x-3 cursor-pointer group">
                 <input 
                   name="featured_decant"
