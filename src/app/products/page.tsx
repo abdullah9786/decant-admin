@@ -605,6 +605,16 @@ export default function ProductList() {
                                   <Star size={10} /> Featured
                                 </span>
                               )}
+                              {product.featured_decant && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold uppercase tracking-wider">
+                                  Home Decants
+                                </span>
+                              )}
+                              {product.featured_sealed_bottle && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded text-[9px] font-bold uppercase tracking-wider">
+                                  Home Sealed
+                                </span>
+                              )}
                               {product.is_new_arrival && (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold uppercase tracking-wider">
                                   <Sparkles size={10} /> New

@@ -16,6 +16,8 @@ export type ProductFormData = {
   stock_ml: number;
   sort_order: number;
   is_featured: boolean;
+  featured_decant: boolean;
+  featured_sealed_bottle: boolean;
   is_new_arrival: boolean;
   is_active: boolean;
   notes_top: string;
@@ -58,6 +60,8 @@ export function createEmptyFormData(
     stock_ml: 0,
     sort_order: 0,
     is_featured: false,
+    featured_decant: false,
+    featured_sealed_bottle: false,
     is_new_arrival: false,
     is_active: true,
     notes_top: '',

@@ -39,6 +39,8 @@ export default function EditProductPage() {
     stock_ml: 0,
     sort_order: 0,
     is_featured: false,
+    featured_decant: false,
+    featured_sealed_bottle: false,
     is_new_arrival: false,
     is_active: true
     ,
@@ -97,6 +99,8 @@ export default function EditProductPage() {
           stock_ml: product.stock_ml || 0,
           sort_order: product.sort_order || 0,
           is_featured: product.is_featured || false,
+          featured_decant: product.featured_decant || false,
+          featured_sealed_bottle: product.featured_sealed_bottle || false,
           is_new_arrival: product.is_new_arrival || false,
           is_active: product.is_active !== undefined ? product.is_active : true,
           notes_top: (product.notes_top || []).join('\n'),
@@ -759,6 +763,26 @@ export default function EditProductPage() {
                   className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" 
                 />
                 <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-600">Mark as Featured</span>
+              </label>
+              <label className="flex items-center space-x-3 cursor-pointer group">
+                <input 
+                  name="featured_decant"
+                  type="checkbox" 
+                  checked={formData.featured_decant}
+                  onChange={handleInputChange}
+                  className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" 
+                />
+                <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-600">Homepage: Decants section</span>
+              </label>
+              <label className="flex items-center space-x-3 cursor-pointer group">
+                <input 
+                  name="featured_sealed_bottle"
+                  type="checkbox" 
+                  checked={formData.featured_sealed_bottle}
+                  onChange={handleInputChange}
+                  className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" 
+                />
+                <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-600">Homepage: Sealed bottles section</span>
               </label>
               <label className="flex items-center space-x-3 cursor-pointer group">
                 <input 
