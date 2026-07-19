@@ -14,7 +14,8 @@ import {
   ArrowDownRight,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
-  Activity
+  Activity,
+  Search,
 } from 'lucide-react';
 import { dashboardApi } from '@/lib/api';
 import { 
@@ -36,8 +37,12 @@ const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function AnalyticsPage() {
   const [stats, setStats] = useState<any>(null);
+  const [searchStats, setSearchStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('7d');
+
+  const searchDays = timeRange === '24h' ? 1 : timeRange === '30d' ? 30 : 7;
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -52,6 +57,22 @@ export default function AnalyticsPage() {
     };
     fetchStats();
   }, []);
+
+  useEffect(() => {
+    const fetchSearchStats = async () => {
+      setSearchLoading(true);
+      try {
+        const response = await dashboardApi.getSearchQueries(searchDays);
+        setSearchStats(response.data);
+      } catch (err) {
+        console.error("Error fetching search analytics", err);
+        setSearchStats(null);
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+    fetchSearchStats();
+  }, [searchDays]);
 
   if (loading) {
     return (
@@ -289,6 +310,129 @@ export default function AnalyticsPage() {
                <button className="text-indigo-600 text-xs font-bold hover:underline underline-offset-4">Run Detailed Audit</button>
             </div>
          </div>
+      </div>
+
+      {/* Storefront search insights */}
+      <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-indigo-600 mb-1">
+              <Search size={18} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Storefront</span>
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">What customers search for</h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Terms people submit from the search bar or search page. Typing in the dropdown without pressing Enter is not counted.
+            </p>
+          </div>
+          {!searchLoading && searchStats && (
+            <div className="flex flex-wrap gap-3 text-xs font-bold uppercase tracking-widest">
+              <span className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600">
+                {searchStats.total_searches} searches
+              </span>
+              <span className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700">
+                {(searchStats.zero_result_rate * 100).toFixed(0)}% found nothing
+              </span>
+            </div>
+          )}
+        </div>
+
+        {searchLoading ? (
+          <div className="h-48 flex items-center justify-center">
+            <Loader2 className="animate-spin text-indigo-600" size={28} />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Popular terms</h4>
+              <p className="text-[11px] text-slate-400 mb-4">How often each term was searched, and how many products usually matched.</p>
+              {(searchStats?.top_queries || []).length > 0 ? (
+                <div className="space-y-2">
+                  {searchStats.top_queries.map((row: any, idx: number) => (
+                    <div
+                      key={`${row.query}-${idx}`}
+                      className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0"
+                    >
+                      <span className="text-sm font-medium text-slate-800 truncate pr-4">{row.query}</span>
+                      <div className="flex flex-col items-end gap-0.5 shrink-0 text-xs text-slate-500">
+                        <span className="font-bold text-slate-700">{row.count}× searched</span>
+                        <span>~{row.avg_results} products matched</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 italic">No searches recorded in this period yet.</p>
+              )}
+            </div>
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Found nothing</h4>
+              <p className="text-[11px] text-slate-400 mb-4">Customers searched for these but your catalog had no matching products — worth checking if you should add them.</p>
+              {(searchStats?.zero_result_queries || []).length > 0 ? (
+                <div className="space-y-2">
+                  {searchStats.zero_result_queries.map((row: any, idx: number) => (
+                    <div
+                      key={`${row.query}-zero-${idx}`}
+                      className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0"
+                    >
+                      <span className="text-sm font-medium text-slate-800 truncate pr-4">{row.query}</span>
+                      <span className="text-xs font-bold text-red-600 shrink-0">{row.count}× searched</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 italic">Every search found at least one product.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!searchLoading && (searchStats?.recent_searches || []).length > 0 && (
+          <div className="pt-6 border-t border-slate-100">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Recent searches</h4>
+            <p className="text-[11px] text-slate-400 mb-4">Latest individual searches — logged-in customers show their email; others show as Guest user.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-2 pr-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Search term</th>
+                    <th className="pb-2 pr-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">User</th>
+                    <th className="pb-2 pr-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Products found</th>
+                    <th className="pb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">When</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {searchStats.recent_searches.map((row: any, idx: number) => (
+                    <tr key={`recent-${idx}`}>
+                      <td className="py-2.5 pr-4 font-medium text-slate-800">{row.query}</td>
+                      <td className="py-2.5 pr-4">
+                        <span className={clsx(
+                          "text-xs font-bold px-2 py-0.5 rounded-full",
+                          row.user_label === 'Guest user'
+                            ? "bg-slate-100 text-slate-500"
+                            : "bg-indigo-50 text-indigo-700"
+                        )}>
+                          {row.user_label || 'Guest user'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-slate-600">{row.result_count}</td>
+                      <td className="py-2.5 text-slate-400 text-xs whitespace-nowrap">
+                        {row.created_at
+                          ? new Date(row.created_at).toLocaleString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -141,6 +141,8 @@ export const brandApi = {
 
 export const dashboardApi = {
     getStats: () => api.get('/analytics/stats'),
+    getSearchQueries: (days = 30) =>
+        api.get('/analytics/search-queries', { params: { days } }),
 };
 
 export const bottleApi = {
