@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { orderApi } from '@/lib/api';
 import { clsx } from 'clsx';
+import OrderProductsCell from './OrderProductsCell';
 
 function safeDate(v: string | undefined | null): Date {
   if (!v) return new Date();
@@ -187,9 +188,11 @@ export default function OrderManagement() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">{order.customer_name || order.shipping_address?.split(',')[0] || 'Anonymous'}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500 italic max-w-[200px] truncate">
-                      {order.items?.[0]?.name}
-                      {order.items?.length > 1 ? ` + ${order.items.length - 1} more` : ''}
+                    <td className="px-6 py-4">
+                      <OrderProductsCell
+                        items={order.items}
+                        freeDecants={order.free_decants}
+                      />
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">{safeDate(order.created_at).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-900">₹{order.total_amount}</td>
