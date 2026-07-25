@@ -30,10 +30,12 @@ export default function OrderManagement() {
   const [activeTab, setActiveTab] = useState('All Orders');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (q?: string) => {
     setLoading(true);
     try {
-      const response = await orderApi.getAll();
+      const trimmed = (q ?? searchTerm).trim();
+      const params = trimmed ? { q: trimmed } : undefined;
+      const response = await orderApi.getAll(params);
       setOrders(response.data);
     } catch (err) {
       console.error("Error fetching orders", err);
@@ -43,8 +45,12 @@ export default function OrderManagement() {
   };
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    const timer = setTimeout(() => {
+      fetchOrders(searchTerm);
+    }, searchTerm.trim() ? 300 : 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
 
   const handleStatusUpdate = async (id: string, status: string) => {
     setUpdatingId(id);
@@ -78,10 +84,8 @@ export default function OrderManagement() {
   };
 
   const filteredOrders = orders.filter(o => {
-    const matchesSearch = (o.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (o.customer_name || o.shipping_address || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTab = activeTab === 'All Orders' || o.status?.toLowerCase() === activeTab.toLowerCase();
-    return matchesSearch && matchesTab;
+    return matchesTab;
   });
 
   return (
@@ -93,7 +97,7 @@ export default function OrderManagement() {
         </div>
         <div className="flex space-x-3">
           <button
-            onClick={fetchOrders}
+            onClick={() => fetchOrders()}
             className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all"
             title="Refresh"
           >
@@ -126,7 +130,7 @@ export default function OrderManagement() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by Order ID, Customer..."
+            placeholder="Search by order ID, customer, email, phone, tracking, or product..."
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
         </div>
