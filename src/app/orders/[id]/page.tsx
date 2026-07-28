@@ -35,6 +35,36 @@ function safeDate(v: string | undefined | null): Date {
   return new Date(v);
 }
 
+function CopyFieldButton({
+  value,
+  fieldKey,
+  copiedField,
+  onCopy,
+}: {
+  value?: string | null;
+  fieldKey: string;
+  copiedField: string | null;
+  onCopy: (text: string, fieldKey: string) => void;
+}) {
+  const text = (value ?? '').trim();
+  if (!text) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onCopy(text, fieldKey)}
+      className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded shrink-0 transition-all cursor-pointer"
+      title="Copy"
+    >
+      {copiedField === fieldKey ? (
+        <CheckCircle2 size={12} className="text-green-600" />
+      ) : (
+        <Copy size={12} />
+      )}
+    </button>
+  );
+}
+
 const STATUS_CONFIG: Record<string, { label: string; icon: any; bg: string; text: string; border: string; dot: string }> = {
   pending: { label: 'Pending', icon: Clock, bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
   processing: { label: 'Processing', icon: Package, bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
@@ -61,7 +91,7 @@ export default function OrderDetailPage() {
     tracking_url: '',
   });
   const [cancelConfirm, setCancelConfirm] = useState<{ itemIndex: number; itemName: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const fetchOrder = async () => {
     try {
@@ -131,11 +161,13 @@ export default function OrderDetailPage() {
     await handleStatusUpdate(overallStatus, updatedItems);
   };
 
-  const copyOrderId = () => {
-    navigator.clipboard.writeText(orderId);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyText = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
   };
+
+  const copyOrderId = () => copyText(orderId, 'order_id');
 
   const handleSaveTracking = async () => {
     if (!order) return;
@@ -261,10 +293,10 @@ export default function OrderDetailPage() {
               <h1 className="text-2xl font-bold text-slate-900 font-mono">#{orderId}</h1>
               <button
                 onClick={copyOrderId}
-                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/oid:opacity-100 transition-all"
+                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/oid:opacity-100 transition-all cursor-pointer"
                 title="Copy Order ID"
               >
-                {copied ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
+                {copiedField === 'order_id' ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
               </button>
             </div>
             <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
@@ -369,12 +401,20 @@ export default function OrderDetailPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <p className={clsx(
-                            "font-bold text-sm",
-                            itemCancelled ? "text-slate-400 line-through" : "text-slate-900"
-                          )}>
-                            {item.name}
-                          </p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className={clsx(
+                              "font-bold text-sm truncate",
+                              itemCancelled ? "text-slate-400 line-through" : "text-slate-900"
+                            )}>
+                              {item.name}
+                            </p>
+                            <CopyFieldButton
+                              value={item.name}
+                              fieldKey={`item_name_${i}`}
+                              copiedField={copiedField}
+                              onCopy={copyText}
+                            />
+                          </div>
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             <span className="text-xs text-slate-500 font-medium">
                               {item.size_ml}ml
@@ -459,9 +499,15 @@ export default function OrderDetailPage() {
                       </div>
                       <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
                         <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-bold text-slate-900 text-sm">{fd.name}</p>
-                            <span className="bg-amber-500 text-white text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-bold text-slate-900 text-sm truncate">{fd.name}</p>
+                            <CopyFieldButton
+                              value={fd.name}
+                              fieldKey={`free_decant_name_${i}`}
+                              copiedField={copiedField}
+                              onCopy={copyText}
+                            />
+                            <span className="bg-amber-500 text-white text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider shrink-0">
                               FREE
                             </span>
                           </div>
@@ -728,14 +774,32 @@ export default function OrderDetailPage() {
                 <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
                   <User size={16} />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-900 truncate">
-                    {order.customer_name || order.shipping_address?.split(',')[0] || 'Anonymous'}
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 flex items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Name</p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">
+                      {order.customer_name || order.shipping_address?.split(',')[0] || 'Anonymous'}
+                    </p>
+                    <CopyFieldButton
+                      value={order.customer_name || order.shipping_address?.split(',')[0] || 'Anonymous'}
+                      fieldKey="customer_name"
+                      copiedField={copiedField}
+                      onCopy={copyText}
+                    />
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 flex items-center gap-1">
                     <Hash size={10} />
-                    <span className="truncate">{order.user_id || 'guest'}</span>
+                    User ID
                   </p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-xs text-slate-600 truncate">{order.user_id || 'guest'}</p>
+                    <CopyFieldButton
+                      value={order.user_id || 'guest'}
+                      fieldKey="user_id"
+                      copiedField={copiedField}
+                      onCopy={copyText}
+                    />
+                  </div>
                 </div>
               </div>
               {order.customer_email && (
@@ -743,11 +807,19 @@ export default function OrderDetailPage() {
                   <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
                     <Mail size={16} />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</p>
-                    <a href={`mailto:${order.customer_email}`} className="text-sm text-slate-900 hover:text-indigo-600 break-all">
-                      {order.customer_email}
-                    </a>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <a href={`mailto:${order.customer_email}`} className="text-sm text-slate-900 hover:text-indigo-600 break-all">
+                        {order.customer_email}
+                      </a>
+                      <CopyFieldButton
+                        value={order.customer_email}
+                        fieldKey="customer_email"
+                        copiedField={copiedField}
+                        onCopy={copyText}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -756,11 +828,19 @@ export default function OrderDetailPage() {
                   <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
                     <Phone size={16} />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone</p>
-                    <a href={`tel:${order.customer_phone}`} className="text-sm text-slate-900 hover:text-indigo-600">
-                      {order.customer_phone}
-                    </a>
+                    <div className="flex items-center gap-1.5">
+                      <a href={`tel:${order.customer_phone}`} className="text-sm text-slate-900 hover:text-indigo-600">
+                        {order.customer_phone}
+                      </a>
+                      <CopyFieldButton
+                        value={order.customer_phone}
+                        fieldKey="customer_phone"
+                        copiedField={copiedField}
+                        onCopy={copyText}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -769,16 +849,24 @@ export default function OrderDetailPage() {
                   <div className="w-9 h-9 rounded-lg bg-pink-50 flex items-center justify-center text-pink-600 flex-shrink-0 text-xs font-black">
                     IG
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Instagram packing video</p>
-                    <a
-                      href={`https://instagram.com/${order.instagram_username.replace(/^@+/, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-slate-900 hover:text-indigo-600"
-                    >
-                      @{order.instagram_username.replace(/^@+/, '')}
-                    </a>
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={`https://instagram.com/${order.instagram_username.replace(/^@+/, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-slate-900 hover:text-indigo-600"
+                      >
+                        @{order.instagram_username.replace(/^@+/, '')}
+                      </a>
+                      <CopyFieldButton
+                        value={`@${order.instagram_username.replace(/^@+/, '')}`}
+                        fieldKey="instagram_username"
+                        copiedField={copiedField}
+                        onCopy={copyText}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -787,32 +875,66 @@ export default function OrderDetailPage() {
                   <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 flex-shrink-0">
                     <Instagram size={16} />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Instagram promo</p>
                     <p className="text-sm text-slate-900">Eligible while promo campaign is active</p>
                     {promoSubmission ? (
                       <div className="mt-1 text-xs text-slate-500 space-y-1">
-                        <p>Status: <span className="font-bold text-emerald-700">{promoSubmission.status}</span></p>
-                        {promoSubmission.poster_instagram_username && (
+                        <div className="flex items-center gap-1.5">
                           <p>
-                            Poster:{" "}
-                            <a
-                              href={`https://instagram.com/${promoSubmission.poster_instagram_username}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-indigo-600 hover:underline"
-                            >
-                              @{promoSubmission.poster_instagram_username}
-                            </a>
+                            Status: <span className="font-bold text-emerald-700">{promoSubmission.status}</span>
                           </p>
+                          <CopyFieldButton
+                            value={promoSubmission.status}
+                            fieldKey="promo_status"
+                            copiedField={copiedField}
+                            onCopy={copyText}
+                          />
+                        </div>
+                        {promoSubmission.poster_instagram_username && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p>
+                              Poster:{" "}
+                              <a
+                                href={`https://instagram.com/${promoSubmission.poster_instagram_username}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-indigo-600 hover:underline"
+                              >
+                                @{promoSubmission.poster_instagram_username}
+                              </a>
+                            </p>
+                            <CopyFieldButton
+                              value={`@${promoSubmission.poster_instagram_username}`}
+                              fieldKey="promo_poster_username"
+                              copiedField={copiedField}
+                              onCopy={copyText}
+                            />
+                          </div>
                         )}
                         {promoSubmission.post_url && (
-                          <a href={promoSubmission.post_url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline block">
-                            View submitted post
-                          </a>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <a href={promoSubmission.post_url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline break-all">
+                              View submitted post
+                            </a>
+                            <CopyFieldButton
+                              value={promoSubmission.post_url}
+                              fieldKey="promo_post_url"
+                              copiedField={copiedField}
+                              onCopy={copyText}
+                            />
+                          </div>
                         )}
                         {promoSubmission.prize_snapshot?.label && (
-                          <p className="text-green-700 font-medium">Prize: {promoSubmission.prize_snapshot.label}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-green-700 font-medium">Prize: {promoSubmission.prize_snapshot.label}</p>
+                            <CopyFieldButton
+                              value={promoSubmission.prize_snapshot.label}
+                              fieldKey="promo_prize"
+                              copiedField={copiedField}
+                              onCopy={copyText}
+                            />
+                          </div>
                         )}
                         <Link href="/promo-submissions" className="text-indigo-600 hover:underline inline-block mt-1">
                           Open promo queue →
@@ -834,9 +956,17 @@ export default function OrderDetailPage() {
               <h3 className="text-sm font-bold text-slate-900">Shipping Address</h3>
             </div>
             <div className="p-6">
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                {order.shipping_address}
-              </p>
+              <div className="flex items-start gap-1.5">
+                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line flex-1 min-w-0">
+                  {order.shipping_address}
+                </p>
+                <CopyFieldButton
+                  value={order.shipping_address}
+                  fieldKey="shipping_address"
+                  copiedField={copiedField}
+                  onCopy={copyText}
+                />
+              </div>
             </div>
           </div>
 

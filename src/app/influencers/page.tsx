@@ -258,7 +258,7 @@ export default function InfluencerManagement() {
                         </span>
                         <button
                           onClick={() => handleCopy(inf.username)}
-                          className="p-1 text-slate-300 hover:text-indigo-600 transition-colors"
+                          className="p-1 text-slate-300 hover:text-indigo-600 transition-colors cursor-pointer"
                           title="Copy storefront URL"
                         >
                           {copied === inf.username ? (

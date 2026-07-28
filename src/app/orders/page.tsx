@@ -180,7 +180,7 @@ export default function OrderManagement() {
                         </Link>
                         <button
                           onClick={() => { navigator.clipboard.writeText(orderId); }}
-                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/oid:opacity-100 transition-all"
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/oid:opacity-100 transition-all cursor-pointer"
                           title="Copy Order ID"
                         >
                           <Copy size={12} />
