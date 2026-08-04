@@ -230,6 +230,7 @@ export default function OrderManagement() {
                           provider="nimbuspost"
                           integration={order.shipping_integrations?.nimbuspost}
                           variant="compact"
+                          orderStatus={order.status}
                           disabled={order.status === 'cancelled'}
                           onSuccess={(integration) => {
                             setOrders((prev) =>
