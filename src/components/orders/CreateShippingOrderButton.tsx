@@ -50,10 +50,11 @@ export default function CreateShippingOrderButton({
   const isCreated = Boolean(current?.external_order_id && current?.status !== "error");
   const hasError = current?.status === "error" || Boolean(error);
 
-  // Once an order is already shipped or delivered there's nothing left to
-  // push — hide the create action entirely. Still show the "synced" badge if
-  // it was already pushed to the provider before that, for record-keeping.
-  const hideForStatus = ["shipped", "delivered"].includes(orderStatus?.toLowerCase() || "");
+  // Once an order is already shipped, delivered, or cancelled there's
+  // nothing left to push — hide the create action entirely. Still show the
+  // "synced" badge if it was already pushed to the provider before that, for
+  // record-keeping.
+  const hideForStatus = ["shipped", "delivered", "cancelled"].includes(orderStatus?.toLowerCase() || "");
   if (hideForStatus && !isCreated) {
     return null;
   }
