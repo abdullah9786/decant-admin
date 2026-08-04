@@ -686,6 +686,7 @@ export default function OrderDetailPage() {
                 orderId={orderId}
                 provider="nimbuspost"
                 integration={order.shipping_integrations?.nimbuspost}
+                orderStatus={order.status}
                 disabled={isCancelled}
                 onSuccess={(integration) =>
                   setOrder({
