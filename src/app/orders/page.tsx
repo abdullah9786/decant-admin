@@ -17,6 +17,7 @@ import {
 import { orderApi } from '@/lib/api';
 import { clsx } from 'clsx';
 import OrderProductsCell from './OrderProductsCell';
+import CreateShippingOrderButton from '@/components/orders/CreateShippingOrderButton';
 
 function safeDate(v: string | undefined | null): Date {
   if (!v) return new Date();
@@ -224,6 +225,28 @@ export default function OrderManagement() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end space-x-2">
+                        <CreateShippingOrderButton
+                          orderId={orderId}
+                          provider="nimbuspost"
+                          integration={order.shipping_integrations?.nimbuspost}
+                          variant="compact"
+                          disabled={order.status === 'cancelled'}
+                          onSuccess={(integration) => {
+                            setOrders((prev) =>
+                              prev.map((o) =>
+                                (o.id || o._id) === orderId
+                                  ? {
+                                      ...o,
+                                      shipping_integrations: {
+                                        ...(o.shipping_integrations || {}),
+                                        nimbuspost: integration,
+                                      },
+                                    }
+                                  : o
+                              )
+                            );
+                          }}
+                        />
                         <Link
                           href={`/orders/${orderId}`}
                           className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all inline-flex"

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { orderApi, promoSubmissionsApi } from '@/lib/api';
 import { clsx } from 'clsx';
+import CreateShippingOrderButton from '@/components/orders/CreateShippingOrderButton';
 
 function safeDate(v: string | undefined | null): Date {
   if (!v) return new Date();
@@ -668,6 +669,42 @@ export default function OrderDetailPage() {
                   <Loader2 size={12} className="animate-spin" /> Updating...
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Shipping partners */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+              <Package size={16} className="text-indigo-600" />
+              <h3 className="text-sm font-bold text-slate-900">Shipping partners</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Push this order to a shipping partner. Courier selection happens in the partner dashboard — not here.
+              </p>
+              <CreateShippingOrderButton
+                orderId={orderId}
+                provider="nimbuspost"
+                integration={order.shipping_integrations?.nimbuspost}
+                disabled={isCancelled}
+                onSuccess={(integration) =>
+                  setOrder({
+                    ...order,
+                    shipping_integrations: {
+                      ...(order.shipping_integrations || {}),
+                      nimbuspost: integration,
+                    },
+                  })
+                }
+              />
+              <button
+                type="button"
+                disabled
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-400 cursor-not-allowed"
+                title="Coming soon"
+              >
+                Shiprocket (coming soon)
+              </button>
             </div>
           </div>
 

@@ -106,6 +106,8 @@ export const orderApi = {
     updateStatus: (id: string, status: string, items?: any[]) => api.put(`/orders/${id}`, { status, items }),
     getAbandonedCheckouts: () => api.get('/orders/abandoned-checkouts'),
     deleteAbandonedCheckout: (id: string) => api.delete(`/orders/abandoned-checkouts/${id}`),
+    createShippingOrder: (orderId: string, provider: string) =>
+        api.post(`/orders/${orderId}/shipping/${provider}/create`),
 };
 
 export const userApi = {
