@@ -29,6 +29,13 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({
+    skip: 0,
+    limit: 100,
+    total: 0,
+    has_more: false
+  });
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
@@ -49,11 +56,17 @@ export default function UserManagement() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (skip: number = 0) => {
     setLoading(true);
     try {
-      const response = await userApi.getAll();
-      setUsers(response.data);
+      const response = await userApi.getAll({ skip, limit: 100 });
+      setUsers(response.data.items || response.data);
+      setPagination({
+        skip: response.data.skip || 0,
+        limit: response.data.limit || 100,
+        total: response.data.total || 0,
+        has_more: response.data.has_more || false
+      });
     } catch (err) {
       console.error('Error fetching users', err);
       setError('Failed to load users. Please check your connection.');
@@ -63,7 +76,8 @@ export default function UserManagement() {
   };
 
   useEffect(() => {
-    fetchUsers();
+    setCurrentPage(1);
+    fetchUsers(0);
   }, []);
 
   const askDelete = (user: any) => {
@@ -204,7 +218,7 @@ export default function UserManagement() {
         </div>
         <div className="flex items-center space-x-4 text-[10px] uppercase tracking-widest font-bold text-slate-400">
           <span>
-            <span className="text-slate-700">{filteredUsers.length}</span> Users
+            <span className="text-slate-700">{pagination.total}</span> Users
           </span>
           <span className="text-slate-200">·</span>
           <span>
@@ -222,7 +236,7 @@ export default function UserManagement() {
         <div className="h-64 flex flex-col items-center justify-center space-y-4 text-center">
           <AlertCircle className="text-red-400" size={48} />
           <p className="text-slate-600 font-medium">{error}</p>
-          <button onClick={fetchUsers} className="text-indigo-600 font-bold hover:underline">
+          <button onClick={() => fetchUsers(0)} className="text-indigo-600 font-bold hover:underline">
             Try Again
           </button>
         </div>
@@ -358,6 +372,38 @@ export default function UserManagement() {
                 })}
               </tbody>
             </table>
+          </div>
+          {/* Pagination */}
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+            <div className="text-sm text-slate-500">
+              Page {currentPage} of {Math.ceil(pagination.total / pagination.limit) || 1}
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  const newPage = currentPage - 1;
+                  const newSkip = (newPage - 1) * pagination.limit;
+                  setCurrentPage(newPage);
+                  fetchUsers(newSkip);
+                }}
+                disabled={currentPage === 1 || loading}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => {
+                  const newPage = currentPage + 1;
+                  const newSkip = (newPage - 1) * pagination.limit;
+                  setCurrentPage(newPage);
+                  fetchUsers(newSkip);
+                }}
+                disabled={!pagination.has_more || loading}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       )}

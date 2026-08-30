@@ -31,14 +31,27 @@ export default function OrderManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('All Orders');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({
+    skip: 0,
+    limit: 100,
+    total: 0,
+    has_more: false
+  });
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const fetchOrders = async (q?: string) => {
+  const fetchOrders = async (q?: string, skip: number = 0) => {
     setLoading(true);
     try {
       const trimmed = (q ?? searchTerm).trim();
-      const params = trimmed ? { q: trimmed } : undefined;
+      const params = trimmed ? { q: trimmed, skip, limit: 100 } : { skip, limit: 100 };
       const response = await orderApi.getAll(params);
-      setOrders(response.data);
+      setOrders(response.data.items || response.data);
+      setPagination({
+        skip: response.data.skip || 0,
+        limit: response.data.limit || 100,
+        total: response.data.total || 0,
+        has_more: response.data.has_more || false
+      });
     } catch (err) {
       console.error("Error fetching orders", err);
     } finally {
@@ -48,7 +61,8 @@ export default function OrderManagement() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchOrders(searchTerm);
+      setCurrentPage(1);
+      fetchOrders(searchTerm, 0);
     }, searchTerm.trim() ? 300 : 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +151,7 @@ export default function OrderManagement() {
           />
         </div>
         <div className="flex items-center space-x-3">
-          <div className="text-xs text-slate-400 font-medium">Showing {filteredOrders.length} orders</div>
+          <div className="text-xs text-slate-400 font-medium">Showing {filteredOrders.length} of {pagination.total} orders</div>
         </div>
       </div>
 
@@ -153,116 +167,150 @@ export default function OrderManagement() {
              <p className="text-slate-500 font-medium italic">No orders found.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Order ID</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Customer</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Products</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Date</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Amount</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 italic">
-                {filteredOrders.map((order) => {
-                  const orderId = order.id || order._id;
-                  return (
-                  <tr key={orderId} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 group/oid">
-                        <Link
-                          href={`/orders/${orderId}`}
-                          className="font-mono text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors"
-                        >
-                          {orderId}
-                        </Link>
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(orderId); }}
-                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/oid:opacity-100 transition-all cursor-pointer"
-                          title="Copy Order ID"
-                        >
-                          <Copy size={12} />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{order.customer_name || order.shipping_address?.split(',')[0] || 'Anonymous'}</td>
-                    <td className="px-6 py-4">
-                      <OrderProductsCell
-                        items={order.items}
-                        freeDecants={order.free_decants}
-                      />
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{safeDate(order.created_at).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-slate-900">₹{order.total_amount}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
-                        {order.status === 'shipped' && <Truck size={14} className="text-indigo-600" />}
-                        {order.status === 'delivered' && <CheckCircle2 size={14} className="text-green-600" />}
-                        {order.status === 'pending' && <Clock size={14} className="text-amber-600" />}
-                        {order.status === 'cancelled' && <XCircle size={14} className="text-red-500" />}
-                        <select
-                          value={order.status?.toLowerCase()}
-                          onChange={(e) => handleStatusUpdate(orderId, e.target.value)}
-                          disabled={updatingId === orderId || order.items?.every((i: any) => i.status === 'cancelled')}
-                          className={clsx(
-                            "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0",
-                            order.status === 'shipped' ? "text-indigo-600" :
-                            (order.status === 'delivered' ? "text-green-600" :
-                            (order.status === 'cancelled' ? "text-red-600" : "text-amber-600"))
-                          )}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="processing">Processing</option>
-                          <option value="shipped">Shipped</option>
-                          <option value="delivered">Delivered</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
-                        {updatingId === orderId && <Loader2 size={12} className="animate-spin text-slate-400" />}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <CreateShippingOrderButton
-                          orderId={orderId}
-                          provider="nimbuspost"
-                          integration={order.shipping_integrations?.nimbuspost}
-                          variant="compact"
-                          orderStatus={order.status}
-                          disabled={order.status === 'cancelled'}
-                          onSuccess={(integration) => {
-                            setOrders((prev) =>
-                              prev.map((o) =>
-                                (o.id || o._id) === orderId
-                                  ? {
-                                      ...o,
-                                      shipping_integrations: {
-                                        ...(o.shipping_integrations || {}),
-                                        nimbuspost: integration,
-                                      },
-                                    }
-                                  : o
-                              )
-                            );
-                          }}
-                        />
-                        <Link
-                          href={`/orders/${orderId}`}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all inline-flex"
-                          title="View Details"
-                        >
-                          <Eye size={16} />
-                        </Link>
-                      </div>
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Order ID</th>
+                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Customer</th>
+                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Products</th>
+                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Date</th>
+                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Amount</th>
+                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
+                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Actions</th>
                   </tr>
-                );
-              })}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100 italic">
+                  {filteredOrders.map((order) => {
+                    const orderId = order.id || order._id;
+                    return (
+                    <tr key={orderId} className="hover:bg-slate-50/50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5 group/oid">
+                          <Link
+                            href={`/orders/${orderId}`}
+                            className="font-mono text-xs font-bold text-slate-900 hover:text-indigo-600 transition-colors"
+                          >
+                            {orderId}
+                          </Link>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(orderId); }}
+                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded opacity-0 group-hover/oid:opacity-100 transition-all cursor-pointer"
+                            title="Copy Order ID"
+                          >
+                            <Copy size={12} />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">{order.customer_name || order.shipping_address?.split(',')[0] || 'Anonymous'}</td>
+                      <td className="px-6 py-4">
+                        <OrderProductsCell
+                          items={order.items}
+                          freeDecants={order.free_decants}
+                        />
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-500">{safeDate(order.created_at).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-900">₹{order.total_amount}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-2">
+                          {order.status === 'shipped' && <Truck size={14} className="text-indigo-600" />}
+                          {order.status === 'delivered' && <CheckCircle2 size={14} className="text-green-600" />}
+                          {order.status === 'pending' && <Clock size={14} className="text-amber-600" />}
+                          {order.status === 'cancelled' && <XCircle size={14} className="text-red-500" />}
+                          <select
+                            value={order.status?.toLowerCase()}
+                            onChange={(e) => handleStatusUpdate(orderId, e.target.value)}
+                            disabled={updatingId === orderId || order.items?.every((i: any) => i.status === 'cancelled')}
+                            className={clsx(
+                              "text-xs font-semibold bg-transparent border-none focus:ring-0 cursor-pointer p-0",
+                              order.status === 'shipped' ? "text-indigo-600" :
+                              (order.status === 'delivered' ? "text-green-600" :
+                              (order.status === 'cancelled' ? "text-red-600" : "text-amber-600"))
+                            )}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="processing">Processing</option>
+                            <option value="shipped">Shipped</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                          {updatingId === orderId && <Loader2 size={12} className="animate-spin text-slate-400" />}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end space-x-2">
+                          <CreateShippingOrderButton
+                            orderId={orderId}
+                            provider="nimbuspost"
+                            integration={order.shipping_integrations?.nimbuspost}
+                            variant="compact"
+                            orderStatus={order.status}
+                            disabled={order.status === 'cancelled'}
+                            onSuccess={(integration) => {
+                              setOrders((prev) =>
+                                prev.map((o) =>
+                                  (o.id || o._id) === orderId
+                                    ? {
+                                        ...o,
+                                        shipping_integrations: {
+                                          ...(o.shipping_integrations || {}),
+                                          nimbuspost: integration,
+                                        },
+                                      }
+                                    : o
+                                )
+                              );
+                            }}
+                          />
+                          <Link
+                            href={`/orders/${orderId}`}
+                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all inline-flex"
+                            title="View Details"
+                          >
+                            <Eye size={16} />
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination */}
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+              <div className="text-sm text-slate-500">
+                Page {currentPage} of {Math.ceil(pagination.total / pagination.limit) || 1}
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    const newPage = currentPage - 1;
+                    const newSkip = (newPage - 1) * pagination.limit;
+                    setCurrentPage(newPage);
+                    fetchOrders(searchTerm, newSkip);
+                  }}
+                  disabled={currentPage === 1 || loading}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => {
+                    const newPage = currentPage + 1;
+                    const newSkip = (newPage - 1) * pagination.limit;
+                    setCurrentPage(newPage);
+                    fetchOrders(searchTerm, newSkip);
+                  }}
+                  disabled={!pagination.has_more || loading}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
