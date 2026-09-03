@@ -117,7 +117,7 @@ export default function ProductList() {
 
   const displayedProducts = products;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const canReorder = debouncedSearch.trim().length === 0 && page === 1 && total <= PAGE_SIZE;
+  const canReorder = debouncedSearch.trim().length === 0;
   const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
@@ -162,12 +162,9 @@ export default function ProductList() {
     current.splice(toIndex, 0, moved);
 
     const updated = current.map((p, idx) => ({ ...p, sort_order: idx + 1 }));
-    setProducts((prev) =>
-      prev.map((p) => {
-        const found = updated.find((u) => getId(u) === getId(p));
-        return found ? { ...p, sort_order: found.sort_order } : p;
-      })
-    );
+    
+    // Immediately update the UI with the new order
+    setProducts(updated);
 
     const changed = updated.filter((p) => prevOrderMap.get(getId(p)) !== p.sort_order);
     if (changed.length === 0) return;
@@ -313,8 +310,7 @@ export default function ProductList() {
           <h1 className="text-2xl font-bold text-slate-900">Products</h1>
           <p className="text-slate-500 mt-1">Manage your perfume catalog and decant variants.</p>
           <p className="text-[10px] uppercase tracking-widest text-slate-400 mt-2">
-            {canReorder ? 'Drag rows to reorder' : 'Reorder available on page 1 when all products fit one page'}
-            {debouncedSearch.trim().length > 0 ? ' (clear search to reorder)' : ''}
+            {canReorder ? 'Drag rows to reorder within current page' : 'Clear search to reorder'}
             {savingOrder ? ' • saving…' : ''}
           </p>
         </div>
