@@ -21,12 +21,24 @@ import {
   BadgeMinus,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 import { productApi, chipApi } from '@/lib/api';
 import { clsx } from 'clsx';
 import { chipColorCls } from '@/components/shared/ChipPickerSection';
 
 const PAGE_SIZE = 50;
+const CSV_PAGE_SIZE = 200;
+const CSV_SIZES = [3, 5, 8, 10, 20, 30];
+type CsvProduct = {
+  name: string;
+  variants?: Array<{ size_ml?: number; price?: number; is_pack?: boolean }>;
+};
+
+function csvCell(value: string | number | null | undefined) {
+  const text = String(value ?? '');
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
 
 export default function ProductList() {
   const [products, setProducts] = useState<any[]>([]);
@@ -38,6 +50,7 @@ export default function ProductList() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState<string | null>(null);
@@ -112,6 +125,56 @@ export default function ProductList() {
       alert('Failed to delete product');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const downloadCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const catalog: CsvProduct[] = [];
+      let skip = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const response = await productApi.getAll({
+          include_inactive: true,
+          paginated: true,
+          exclude_product_type: 'set',
+          skip,
+          limit: CSV_PAGE_SIZE,
+        });
+        const data = response.data as { items?: CsvProduct[]; has_more?: boolean };
+        const items = Array.isArray(data?.items) ? data.items : [];
+        catalog.push(...items);
+        hasMore = Boolean(data?.has_more) && items.length > 0;
+        skip += items.length;
+      }
+
+      const header = ['product name', ...CSV_SIZES.map((size) => `${size}ml`)];
+      const rows = catalog.map((product) => {
+        const decantPriceBySize = new Map<number, number>();
+        for (const variant of product.variants || []) {
+          if (!variant.is_pack && CSV_SIZES.includes(Number(variant.size_ml))) {
+            decantPriceBySize.set(Number(variant.size_ml), Number(variant.price));
+          }
+        }
+        return [product.name, ...CSV_SIZES.map((size) => decantPriceBySize.get(size) ?? '')];
+      });
+      const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `decant-prices-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('CSV export failed', err);
+      alert('Failed to download CSV. Please try again.');
+    } finally {
+      setExportingCsv(false);
     }
   };
 
@@ -315,6 +378,15 @@ export default function ProductList() {
           </p>
         </div>
         <div className="flex space-x-3">
+          <button
+            onClick={downloadCsv}
+            disabled={exportingCsv}
+            className="bg-white text-slate-700 px-4 py-2.5 rounded-lg flex items-center space-x-2 font-bold text-sm border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-all"
+            title="Download every product's decant prices as CSV"
+          >
+            {exportingCsv ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+            <span>{exportingCsv ? 'Preparing CSV…' : 'Download CSV'}</span>
+          </button>
           <button
             onClick={fetchProducts}
             className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all"
